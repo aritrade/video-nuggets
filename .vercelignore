@@ -1,0 +1,8 @@
+# The Vercel deploy only needs the frontend build + the api/ serverless function
+# and the static media under frontend/public. The full FastAPI backend, the
+# original prototype, and the one-time seed scripts are not used at deploy time.
+backend/
+lite/
+scripts/
+**/__pycache__/
+**/.venv/

@@ -108,8 +108,14 @@ function randomId() {
 }
 
 module.exports = async (req, res) => {
-  const url = (req.url || '').split('?')[0].replace(/\/+$/, '') || '/';
-  const path = url.startsWith('/api') ? url : `/api${url}`;
+  // The vercel.json rewrite maps /api/(.*) -> /api/index?p=$1, so the matched
+  // route lives in the `p` query param. Fall back to the raw pathname for
+  // direct invocations (e.g. local tests).
+  const parsed = new URL(req.url || '/', 'http://localhost');
+  const p = parsed.searchParams.get('p');
+  let path = p !== null ? `/api/${p}` : parsed.pathname;
+  path = path.replace(/\/+$/, '') || '/';
+  if (!path.startsWith('/api')) path = `/api${path === '/' ? '' : path}`;
   const method = req.method || 'GET';
 
   if (method === 'OPTIONS') return send(res, 204, {});

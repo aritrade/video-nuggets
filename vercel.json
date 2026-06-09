@@ -4,6 +4,7 @@
   "outputDirectory": "frontend/dist",
   "framework": null,
   "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index?p=$1" },
     { "source": "/((?!api/|static/|assets/).*)", "destination": "/index.html" }
   ]
 }
