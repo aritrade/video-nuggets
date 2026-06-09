@@ -1,0 +1,53 @@
+{
+  "1": {
+    "id": 1,
+    "title": "What is Hyperconverged Infrastructure?",
+    "description": "Compute and storage collapsed into one scale-out building block \u2014 nodes, clusters, and a self-healing distributed storage pool.",
+    "status": "ready",
+    "video_url": "/static/videos/1.mp4",
+    "transcript_url": "/static/transcripts/1.vtt",
+    "thumbnail_url": "/static/thumbnails/1.png",
+    "slides_url": null,
+    "duration_seconds": 136.68,
+    "difficulty_level": "basic",
+    "visibility": "public",
+    "version": 1,
+    "playlist_id": 1,
+    "playlist_order": 0,
+    "created_at": "2024-01-01T00:00:00"
+  },
+  "2": {
+    "id": 2,
+    "title": "Virtualization & the Hypervisor",
+    "description": "How one physical machine becomes many: the hypervisor, isolation, live migration, and pooled resources.",
+    "status": "ready",
+    "video_url": "/static/videos/2.mp4",
+    "transcript_url": "/static/transcripts/2.vtt",
+    "thumbnail_url": "/static/thumbnails/2.png",
+    "slides_url": null,
+    "duration_seconds": 115.536,
+    "difficulty_level": "basic",
+    "visibility": "public",
+    "version": 1,
+    "playlist_id": 1,
+    "playlist_order": 1,
+    "created_at": "2024-01-01T00:00:00"
+  },
+  "3": {
+    "id": 3,
+    "title": "The Management Plane",
+    "description": "The control tower for a cluster: one console for everything, plus the API that powers automation.",
+    "status": "ready",
+    "video_url": "/static/videos/3.mp4",
+    "transcript_url": "/static/transcripts/3.vtt",
+    "thumbnail_url": "/static/thumbnails/3.png",
+    "slides_url": null,
+    "duration_seconds": 107.592,
+    "difficulty_level": "platform_deep_dive",
+    "visibility": "public",
+    "version": 1,
+    "playlist_id": 1,
+    "playlist_order": 2,
+    "created_at": "2024-01-01T00:00:00"
+  }
+}

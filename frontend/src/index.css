@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-brand-dark text-white antialiased;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-brand-purple-light hover:bg-brand-purple text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+  }
+  .btn-secondary {
+    @apply bg-brand-dark-blue hover:bg-brand-teal text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
+  }
+  .card {
+    @apply bg-gray-900 border border-gray-800 rounded-xl p-6 hover:border-brand-purple-light/50 transition-colors duration-200;
+  }
+}

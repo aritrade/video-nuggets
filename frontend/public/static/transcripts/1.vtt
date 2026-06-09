@@ -1,0 +1,26 @@
+WEBVTT
+
+1
+00:00:00.000 --> 00:00:07.272
+Welcome to Video Nuggets OS. In this lesson, we'll explore What is Hyperconverged Infrastructure?. Let's get started!
+
+2
+00:00:07.272 --> 00:00:43.008
+Let's talk about what is hyperconverged infrastructure. Think of Hyperconverged Infrastructure like one all-in-one box that does both the thinking and the remembering, instead of lots of separate boxes. Traditional data centers keep three things in separate boxes: servers that do the thinking, storage arrays that hold the data, and a network that wires them together. Each box is bought, managed, and scaled on its own. That separation made sense decades ago, but it creates silos, slow procurement, and a lot of specialist hand-offs. And that's the big idea — simple building blocks working together.
+
+3
+00:00:43.008 --> 00:01:06.792
+Let's talk about the building block: nodes and clusters. Think of Clusters like a team of friends who share their toys so they can do bigger things together. A node is just an industry-standard server with CPUs, memory, and local drives. On its own a node is not very interesting. The magic happens when you group several nodes into a cluster. And that's the big idea — simple building blocks working together.
+
+4
+00:01:06.792 --> 00:01:39.480
+Let's talk about the distributed storage layer. Think of HCI like one all-in-one box that does both the thinking and the remembering, instead of lots of separate boxes. In HCI, there is no central storage array. Instead, every node contributes its local drives to a shared, distributed storage pool that spans the whole cluster. A software layer running on each node turns that pile of local disks into one virtual storage system that every virtual machine can use. And that's the big idea — simple building blocks working together.
+
+5
+00:01:39.480 --> 00:02:06.744
+Let's talk about why teams choose hci. Think of HCI like one all-in-one box that does both the thinking and the remembering, instead of lots of separate boxes. The first reason is simplicity. One team can manage compute, storage, and virtualization from a single console instead of juggling three separate systems and three separate vendors. The second reason is predictable growth. And that's the big idea — simple building blocks working together.
+
+6
+00:02:06.744 --> 00:02:16.680
+That wraps up our lesson on What is Hyperconverged Infrastructure?. Thanks for watching! If you found this helpful, explore more Video Nuggets to keep learning. See you next time!
+

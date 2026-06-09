@@ -1,0 +1,22 @@
+WEBVTT
+
+1
+00:00:00.000 --> 00:00:07.368
+Welcome to Video Nuggets OS. In this lesson, we'll explore Virtualization and the Hypervisor. Let's get started!
+
+2
+00:00:07.368 --> 00:00:35.232
+Let's talk about virtualization and the hypervisor. Think of Hypervisor like a careful babysitter that lets many pretend-computers share one real computer without fighting. For a long time, every application got its own physical server. Most of those servers sat almost idle, using a small slice of their power while still drawing electricity and taking up space. It was wasteful and slow to change. And that's the big idea — simple building blocks working together.
+
+3
+00:00:35.232 --> 00:01:10.560
+Let's talk about what the hypervisor does. Think of Hypervisor like a careful babysitter that lets many pretend-computers share one real computer without fighting. The hypervisor is the software that creates and runs virtual machines. It sits between the physical hardware and the virtual machines, handing out slices of CPU, memory, and storage to each one and keeping them isolated from each other. Because the hypervisor controls the hardware, it can do clever things: pause a running machine, move it to a different host without downtime, or instantly create a copy. And that's the big …
+
+4
+00:01:10.560 --> 00:01:45.504
+Let's talk about pooling and scheduling resources. Think of hypervisor like a careful babysitter that lets many pretend-computers share one real computer without fighting. When many hosts run a hypervisor and are joined together, their CPUs and memory form one large pool. A scheduler decides which host should run each virtual machine, balancing the load so no single host is overwhelmed while others sit empty. If a host needs maintenance, its virtual machines simply migrate to other hosts first. And that's the big idea — simple building blocks working together.
+
+5
+00:01:45.504 --> 00:01:55.536
+That wraps up our lesson on Virtualization and the Hypervisor. Thanks for watching! If you found this helpful, explore more Video Nuggets to keep learning. See you next time!
+

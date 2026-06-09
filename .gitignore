@@ -1,6 +1,23 @@
 .DS_Store
-node_modules/
-.vercel
 *.log
+
+# Node / Vite
+node_modules/
+frontend/dist/
+
+# Python
+**/__pycache__/
+*.pyc
+backend/.venv/
+backend/output/
+backend/*.db
+
+# Env / secrets
 .env
 .env.local
+.env.*.local
+
+# Vercel
+.vercel
+
+# NOTE: backend/seed/ is intentionally committed (the demo library).

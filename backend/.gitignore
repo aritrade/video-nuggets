@@ -1,0 +1,8 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.env
+*.db
+output/
+# Seed assets ARE committed (seed/), but never the live output dir.

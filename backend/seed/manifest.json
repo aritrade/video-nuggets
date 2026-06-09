@@ -1,0 +1,34 @@
+{
+  "nuggets": [
+    {
+      "key": "hci-basics",
+      "title": "What is Hyperconverged Infrastructure?",
+      "description": "Compute and storage collapsed into one scale-out building block \u2014 nodes, clusters, and a self-healing distributed storage pool.",
+      "difficulty": "basic",
+      "duration_seconds": 136.68,
+      "video_file": "hci-basics.mp4",
+      "thumbnail_file": "hci-basics.png",
+      "transcript_file": "hci-basics.vtt"
+    },
+    {
+      "key": "virtualization",
+      "title": "Virtualization & the Hypervisor",
+      "description": "How one physical machine becomes many: the hypervisor, isolation, live migration, and pooled resources.",
+      "difficulty": "basic",
+      "duration_seconds": 115.536,
+      "video_file": "virtualization.mp4",
+      "thumbnail_file": "virtualization.png",
+      "transcript_file": "virtualization.vtt"
+    },
+    {
+      "key": "management-plane",
+      "title": "The Management Plane",
+      "description": "The control tower for a cluster: one console for everything, plus the API that powers automation.",
+      "difficulty": "platform_deep_dive",
+      "duration_seconds": 107.592,
+      "video_file": "management-plane.mp4",
+      "thumbnail_file": "management-plane.png",
+      "transcript_file": "management-plane.vtt"
+    }
+  ]
+}
