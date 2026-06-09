@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Video Nuggets — turn any doc into a narrated micro-lesson</title>
+<meta name="description" content="Video Nuggets turns a plain document into a narrated, auto-advancing video lesson with charts and a Q&A bot — entirely in your browser. A public prototype replica of a doc-to-video pipeline." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/css/style.css" />
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="badge">Open prototype · runs entirely in your browser</div>
+    <h1>Video&nbsp;Nuggets</h1>
+    <p class="tagline">Paste a document. Get back a narrated, auto-advancing <strong>video lesson</strong> — with charts, captions, and a Q&amp;A bot trained on the content. No upload, no server, no API key required.</p>
+    <div class="hero-pipe">
+      <span>📄 Doc</span><i>→</i><span>✂️ Simplify</span><i>→</i><span>📊 Visualize</span><i>→</i><span>🖼 Slides</span><i>→</i><span>🔊 Narrate</span><i>→</i><span>🎬 Nugget</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- INPUT -->
+  <section class="card">
+    <div class="card-head">
+      <h2>1 · Bring a document</h2>
+      <p>Pick a sample, or paste your own text (headings help). Everything stays on your device.</p>
+    </div>
+    <div id="sampleRow" class="sample-row"></div>
+    <textarea id="docInput" placeholder="Paste a document here — an article, notes, a spec, a wiki page. Use short heading lines to mark sections."></textarea>
+
+    <div class="llm-row">
+      <label class="switch">
+        <input type="checkbox" id="llmToggle" />
+        <span>Use my own LLM for the “explain-like-I’m-6” step (optional)</span>
+      </label>
+      <div id="llmFields" class="llm-fields hidden">
+        <input id="llmEndpoint" type="text" placeholder="OpenAI-compatible endpoint, e.g. https://api.openai.com/v1/chat/completions" />
+        <input id="llmKey" type="password" placeholder="API key (kept in your browser only)" />
+        <input id="llmModel" type="text" placeholder="model (e.g. gpt-4o-mini)" />
+        <p class="hint">Left off, Video Nuggets uses a free, deterministic simplifier — so the demo always works at zero cost.</p>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="generateBtn" class="btn primary">🎬 Make the nugget</button>
+      <span id="genStatus" class="status"></span>
+    </div>
+  </section>
+
+  <!-- PIPELINE -->
+  <section id="pipelineCard" class="card hidden">
+    <div class="card-head"><h2>2 · The pipeline</h2><p>The same stages the production backend runs — here, live in your browser.</p></div>
+    <div id="stages" class="stages"></div>
+  </section>
+
+  <!-- PLAYER -->
+  <section id="player" class="card hidden">
+    <div class="card-head"><h2>3 · Your Video Nugget</h2><p>Auto-advancing, narrated with your browser’s voice. Use the controls or jump via the transcript.</p></div>
+    <div class="player-grid">
+      <div>
+        <div id="stageWrap" class="stage-wrap">
+          <div class="stage-bar"><i class="r"></i><i class="y"></i><i class="g"></i><span>video-nugget.player</span></div>
+          <div id="stage" class="stage"></div>
+          <div id="captionBox" class="caption"></div>
+        </div>
+        <div class="progress"><div id="progressFill" class="progress-fill"></div></div>
+        <div class="controls">
+          <button id="prevBtn" class="ctl" title="Previous">⏮</button>
+          <button id="playBtn" class="ctl primary">Play</button>
+          <button id="nextBtn" class="ctl" title="Next">⏭</button>
+          <button id="restartBtn" class="ctl" title="Restart">↺</button>
+          <span id="slideCounter" class="counter">0 / 0</span>
+          <label class="speed">Speed
+            <select id="speedSel">
+              <option value="0.75">0.75×</option>
+              <option value="1" selected>1×</option>
+              <option value="1.25">1.25×</option>
+              <option value="1.5">1.5×</option>
+            </select>
+          </label>
+          <button id="captionToggle" class="ctl on" title="Toggle captions">CC</button>
+          <button id="fullscreenBtn" class="ctl" title="Fullscreen">⛶</button>
+        </div>
+      </div>
+      <div class="transcript">
+        <h3>Transcript</h3>
+        <div id="transcriptList" class="transcript-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CHATBOT -->
+  <section id="chatPanel" class="card chat-card hidden">
+    <div class="card-head"><h2>4 · Ask NuggetBot</h2><p>A tiny retrieval bot indexed on the generated lesson — it answers only from this content and cites the slide.</p></div>
+    <div id="chatLog" class="chat-log"></div>
+    <div id="suggestRow" class="suggest-row"></div>
+    <form id="chatForm" class="chat-form">
+      <input id="chatInput" type="text" placeholder="Ask about the lesson…" autocomplete="off" />
+      <button type="submit" class="btn primary">Ask</button>
+    </form>
+  </section>
+
+  <!-- ABOUT -->
+  <section class="card about">
+    <h2>What this is</h2>
+    <p><strong>Video Nuggets</strong> is a public, in-browser prototype that replicates the concept of a larger doc-to-video platform I built: it turns plain documents into short, narrated, branded “nugget” lessons, then lets you ask questions about them. The original is a Python/FastAPI service with a heavyweight render pipeline (Ollama, Edge TTS, ffmpeg, LibreOffice, ChromaDB). This replica runs the <em>same stages</em> with zero-cost browser equivalents so anyone can try it instantly — nothing installs, nothing leaves your device.</p>
+    <div class="map">
+      <div><span>Parse</span><code>content_parser.py</code></div>
+      <div><span>Simplify</span><code>content_simplifier.py · Gemma</code></div>
+      <div><span>Visualize</span><code>visualization_gen.py</code></div>
+      <div><span>Slides</span><code>slide_generator.py</code></div>
+      <div><span>Narrate</span><code>tts_service.py · Edge TTS</code></div>
+      <div><span>Compose</span><code>video_composer.py · ffmpeg</code></div>
+      <div><span>Q&amp;A</span><code>rag_engine.py · ChromaDB</code></div>
+    </div>
+    <p class="disclaimer">Independent, original prototype. Not affiliated with or endorsed by Nutanix, Inc. The “Nutanix Bible” is a publicly available document referenced only as an example of the kind of source this tool is designed for; no Nutanix brand assets, templates, or proprietary materials are included. Sample texts here are original and vendor-neutral.</p>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <span>Video Nuggets · a prototype by Aritra De · 2026</span>
+    <a href="https://github.com/aritrade" target="_blank" rel="noopener">GitHub</a>
+  </div>
+</footer>
+
+<script src="assets/js/samples.js"></script>
+<script src="assets/js/pipeline.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>
