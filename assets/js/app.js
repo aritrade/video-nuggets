@@ -1,5 +1,5 @@
 /*
- * Video Nuggets — UI orchestration, narrated player, and NuggetBot chat.
+ * Video Nuggets OS — UI orchestration, narrated player, and NuggetBot chat.
  * Depends on pipeline.js (window.VN) and samples.js (window.VN_SAMPLES).
  */
 (function () {

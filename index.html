@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Video Nuggets — turn any doc into a narrated micro-lesson</title>
-<meta name="description" content="Video Nuggets turns a plain document into a narrated, auto-advancing video lesson with charts and a Q&A bot — entirely in your browser. A public prototype replica of a doc-to-video pipeline." />
+<title>Video Nuggets OS — turn any doc into a narrated micro-lesson</title>
+<meta name="description" content="Video Nuggets OS turns a plain document into a narrated, auto-advancing video lesson with charts and a Q&A bot — entirely in your browser. A public prototype replica of a doc-to-video pipeline." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
@@ -15,7 +15,7 @@
 <header class="hero">
   <div class="wrap">
     <div class="badge">Open prototype · runs entirely in your browser</div>
-    <h1>Video&nbsp;Nuggets</h1>
+    <h1>Video&nbsp;Nuggets&nbsp;OS</h1>
     <p class="tagline">Paste a document. Get back a narrated, auto-advancing <strong>video lesson</strong> — with charts, captions, and a Q&amp;A bot trained on the content. No upload, no server, no API key required.</p>
     <div class="hero-pipe">
       <span>📄 Doc</span><i>→</i><span>✂️ Simplify</span><i>→</i><span>📊 Visualize</span><i>→</i><span>🖼 Slides</span><i>→</i><span>🔊 Narrate</span><i>→</i><span>🎬 Nugget</span>
@@ -43,7 +43,7 @@
         <input id="llmEndpoint" type="text" placeholder="OpenAI-compatible endpoint, e.g. https://api.openai.com/v1/chat/completions" />
         <input id="llmKey" type="password" placeholder="API key (kept in your browser only)" />
         <input id="llmModel" type="text" placeholder="model (e.g. gpt-4o-mini)" />
-        <p class="hint">Left off, Video Nuggets uses a free, deterministic simplifier — so the demo always works at zero cost.</p>
+        <p class="hint">Left off, Video Nuggets OS uses a free, deterministic simplifier — so the demo always works at zero cost.</p>
       </div>
     </div>
 
@@ -109,7 +109,7 @@
   <!-- ABOUT -->
   <section class="card about">
     <h2>What this is</h2>
-    <p><strong>Video Nuggets</strong> is a public, in-browser prototype that replicates the concept of a larger doc-to-video platform I built: it turns plain documents into short, narrated, branded “nugget” lessons, then lets you ask questions about them. The original is a Python/FastAPI service with a heavyweight render pipeline (Ollama, Edge TTS, ffmpeg, LibreOffice, ChromaDB). This replica runs the <em>same stages</em> with zero-cost browser equivalents so anyone can try it instantly — nothing installs, nothing leaves your device.</p>
+    <p><strong>Video Nuggets OS</strong> is a public, in-browser prototype that replicates the concept of a larger doc-to-video platform I built: it turns plain documents into short, narrated, branded “nugget” lessons, then lets you ask questions about them. The original is a Python/FastAPI service with a heavyweight render pipeline (Ollama, Edge TTS, ffmpeg, LibreOffice, ChromaDB). This replica runs the <em>same stages</em> with zero-cost browser equivalents so anyone can try it instantly — nothing installs, nothing leaves your device.</p>
     <div class="map">
       <div><span>Parse</span><code>content_parser.py</code></div>
       <div><span>Simplify</span><code>content_simplifier.py · Gemma</code></div>
@@ -126,7 +126,7 @@
 
 <footer class="footer">
   <div class="wrap">
-    <span>Video Nuggets · a prototype by Aritra De · 2026</span>
+    <span>Video Nuggets OS · a prototype by Aritra De · 2026</span>
     <a href="https://github.com/aritrade" target="_blank" rel="noopener">GitHub</a>
   </div>
 </footer>

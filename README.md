@@ -1,4 +1,4 @@
-# Video Nuggets
+# Video Nuggets OS
 
 **Turn any document into a narrated, auto-advancing micro-lesson — with charts, captions, and a Q&A bot — entirely in your browser.**
 
@@ -8,7 +8,7 @@
 ![cost](https://img.shields.io/badge/cost-%240%20%C2%B7%20no%20API%20key%20needed-success)
 ![license](https://img.shields.io/badge/license-All%20Rights%20Reserved-red)
 
-Video Nuggets is a **public, in-browser prototype** that replicates the concept
+Video Nuggets OS is a **public, in-browser prototype** that replicates the concept
 of a larger doc-to-video platform I built. Paste a document, and it runs a full
 pipeline — **parse → simplify → visualize → slides → narrate → play** — then
 hands you a short "nugget" lesson you can watch, scrub, and *ask questions

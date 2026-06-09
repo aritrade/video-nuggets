@@ -1,5 +1,5 @@
 /*
- * Sample source documents for the Video Nuggets demo.
+ * Sample source documents for the Video Nuggets OS demo.
  *
  * These are ORIGINAL, generic explainers written for this prototype. They are
  * deliberately not copied from any book or site. They describe widely-known,

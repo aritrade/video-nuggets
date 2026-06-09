@@ -1,5 +1,5 @@
 /*
- * Video Nuggets — in-browser pipeline.
+ * Video Nuggets OS — in-browser pipeline.
  *
  * This file is the public, client-side conceptual replica of the production
  * pipeline (Python/FastAPI). Each module here maps 1:1 to a backend service:
@@ -372,7 +372,7 @@
       kind: "intro",
       title: simplified.title,
       subtitle: "A Video Nugget",
-      narration: `Welcome to Video Nuggets. In this short lesson we'll explore ${simplified.title}. Let's get started!`,
+      narration: `Welcome to Video Nuggets OS. In this short lesson we'll explore ${simplified.title}. Let's get started!`,
     });
     simplified.sections.forEach((sec) => {
       slides.push({
