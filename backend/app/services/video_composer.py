@@ -88,6 +88,11 @@ def compose_video(
             parsed_content, audio_segments, slide_images,
             layouts=slide_layouts, diagrams=slide_diagrams, style=style,
         )
+        # Render-time SOP enforcement (opening hook, motion floor, caption clamp).
+        from app.services.animation.policy import enforce_scene_policy
+        scenes, scene_adjustments = enforce_scene_policy(scenes)
+        for note in scene_adjustments:
+            print(f"[compose_video]   SOP - {note}")
         for i, scene in enumerate(scenes):
             seg_path = str(VIDEOS_DIR / f"segment_{video_id}_{i:03d}.mp4")
             print(

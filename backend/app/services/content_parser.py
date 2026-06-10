@@ -30,6 +30,10 @@ class ContentSection:
     # drives scene selection + animated beats/diagram (see storyboard_llm.py).
     # Shape: {"scene_type", "headline", "beats":[{anchor,text}], "diagram":{nodes,edges}}
     visual_script: dict = field(default_factory=dict)
+    # Optional real source-document figure matched to this section by the video
+    # director. Shape: {"abs_path", "caption", "heading"} - rendered + animated by
+    # the source_figure template when present (see video_director.py).
+    source_figure: dict = field(default_factory=dict)
 
 
 @dataclass

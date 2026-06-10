@@ -9,8 +9,8 @@ from sqlalchemy.orm import Session
 from app.models.database import SessionLocal, Video, VideoStatus
 from app.services.content_parser import parse_source
 from app.services.content_simplifier import simplify_content
-from app.services.storyboard_llm import generate_visual_scripts
-from app.services.theme_engine import decide_video_style
+from app.services import figure_index
+from app.services.video_director import direct_video
 from app.services.visualization_gen import (
     generate_comparison_chart,
     generate_architecture_diagram,
@@ -51,10 +51,13 @@ async def _async_direct_pipeline(video_id: int, parsed):
             video.title = parsed.title
             db.commit()
 
-        # Pre-authored narration still gets an animated storyboard.
-        await generate_visual_scripts(parsed)
-        # Decide the cohesive per-video look (accents/mood/background).
-        style = await decide_video_style(parsed)
+        # The video intelligence agent: color-psychology look + per-section
+        # moving-visual plan (figure > synth diagram > minimal). Pre-authored
+        # direct content has no uploaded PDF, so no per-video figure index.
+        plan = await direct_video(parsed)
+        style = plan.style
+        print(f"[DirectPipeline] video {video_id}: SOP applied with "
+              f"{len(plan.adjustments)} auto-correction(s)")
 
         visualizations = _generate_visualizations(parsed)
         slides_path = generate_slides(parsed, video_id, visualizations)
@@ -117,11 +120,17 @@ async def _async_pipeline(video_id: int, source_path: str):
 
         simplified = await simplify_content(parsed)
 
-        # Author the per-section visual storyboard (scene type + beats + diagram)
-        # used by the animation engine. Always succeeds (deterministic fallback).
-        await generate_visual_scripts(simplified)
-        # Decide the cohesive per-video look (accents/mood/background).
-        style = await decide_video_style(simplified)
+        # Mine the source document for real figures/architecture to animate
+        # (no-op for txt/url/image sources).
+        figures = figure_index.build_for_pdf(source_path, video_id)
+
+        # The video intelligence agent: color-psychology look + per-section
+        # moving-visual plan (real figure > synthesized diagram > minimal text).
+        # This is the always-on rule set for every video.
+        plan = await direct_video(simplified, figures)
+        style = plan.style
+        print(f"[Pipeline] video {video_id}: SOP applied with "
+              f"{len(plan.adjustments)} auto-correction(s)")
 
         visualizations = _generate_visualizations(simplified)
 

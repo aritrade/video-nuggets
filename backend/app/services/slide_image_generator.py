@@ -813,6 +813,91 @@ def render_bible_diagram(
     return _footer(img, video_title, slide_num, total)
 
 
+def render_source_figure(
+    title: str, body: str, slide_num: int, total: int, video_title: str,
+    figure: dict,
+) -> Image.Image:
+    """Slide that showcases a REAL figure mined from the uploaded source document.
+
+    Generalization of render_bible_diagram: identical panel chrome, but the
+    figure is loaded from an absolute path (per-video figure index) and the
+    attribution comes from the figure's own heading/caption. The animation layer
+    (build_source_figure) reveals it and adds narration-synced callouts.
+    """
+    img = _base_canvas(seed=hash(title) & 0xFFFF)
+    accent = _accent_pair(slide_num)
+
+    label = (figure.get("heading") or "FROM THE SOURCE").strip().upper()
+    if len(label) > 30:
+        label = label[:29] + "\u2026"
+    img, _, _ = _draw_pill(img, (80, 80), label, bg=accent[0], font_size=22)
+
+    title_font = _font("black", 64)
+    draw = ImageDraw.Draw(img)
+    title_lines = _wrap_text(title, title_font, CANVAS_W - 160, draw)
+    y = 150
+    for line in title_lines[:2]:
+        _draw_gradient_text(img, (80, y), line, title_font, accent[0], accent[1])
+        y += 76
+
+    bf = _font("regular", 26)
+    excerpt = _first_sentences(body, 2) or body[:160]
+    body_lines = _wrap_text(excerpt, bf, CANVAS_W - 160, ImageDraw.Draw(img))
+    body_y = y + 14
+    for line in body_lines[:2]:
+        ImageDraw.Draw(img).text((80, body_y), line, font=bf, fill=TEXT_MUTED)
+        body_y += 36
+
+    panel_top = max(body_y + 20, 360)
+    panel_bottom = 970
+    panel_x0 = 80
+    panel_x1 = CANVAS_W - 80
+    panel_w = panel_x1 - panel_x0
+    panel_h = panel_bottom - panel_top
+
+    img = _draw_card(img, (panel_x0, panel_top, panel_x1, panel_bottom),
+                     fill=(255, 255, 255, 240), border=accent[0] + (200,),
+                     radius=24, border_w=3)
+
+    # The figure itself is composited by the animation layer (diagram_reveal) so
+    # it can animate; on the static slide we only draw the empty panel chrome
+    # when overlays are active, else paste it for the static fallback path.
+    if not OMIT_FOCAL_ICONS:
+        fig_img = _load_figure_image(figure.get("abs_path"))
+        if fig_img is not None:
+            max_w = panel_w - 60
+            max_h = panel_h - 60
+            dw, dh = fig_img.size
+            scale = min(max_w / dw, max_h / dh)
+            scaled = fig_img.resize((max(1, int(dw * scale)), max(1, int(dh * scale))), Image.LANCZOS)
+            cx = panel_x0 + panel_w // 2
+            cy = panel_top + panel_h // 2
+            canvas_rgba = img.convert("RGBA")
+            canvas_rgba.paste(scaled, (cx - scaled.size[0] // 2, cy - scaled.size[1] // 2), scaled)
+            img = canvas_rgba.convert("RGB")
+
+    caption_text = (figure.get("caption") or figure.get("heading") or "").strip()
+    if caption_text:
+        cf = _font("bold", 22)
+        d = ImageDraw.Draw(img)
+        cap = caption_text if len(caption_text) <= 100 else caption_text[:97] + "..."
+        d.text((CANVAS_W // 2, panel_bottom + 18), cap, font=cf, fill=accent[1], anchor="mt")
+
+    return _footer(img, video_title, slide_num, total)
+
+
+def _load_figure_image(abs_path: Optional[str]) -> Optional[Image.Image]:
+    if not abs_path:
+        return None
+    try:
+        p = Path(abs_path)
+        if not p.exists():
+            return None
+        return Image.open(p).convert("RGBA")
+    except Exception:
+        return None
+
+
 # ---------------- Layout: DEFAULT (rich text + visual) ----------------
 
 def render_default(title: str, body: str, slide_num: int, total: int, video_title: str) -> Image.Image:
@@ -1090,8 +1175,24 @@ def render_slide_images_with_layouts(
 
     for i, section in enumerate(content.sections):
         diagram = section_diagrams[i]
-        layout = _detect_layout(section, i, total_sections, diagram=diagram)
         slide_num = i + 1
+
+        # A real source-document figure (chosen by the video director) takes
+        # precedence over everything: show the actual diagram, animated.
+        source_fig = getattr(section, "source_figure", None) or {}
+        if source_fig.get("abs_path"):
+            img_obj = render_source_figure(
+                section.title, section.body, slide_num, total_sections,
+                content.title, figure=source_fig,
+            )
+            path = output_dir / f"slide_{video_id}_{slide_num:03d}.png"
+            img_obj.save(path, "PNG")
+            images.append(str(path))
+            layouts.append("source_figure")
+            diagrams.append(source_fig)
+            continue
+
+        layout = _detect_layout(section, i, total_sections, diagram=diagram)
         if layout == "bible_diagram" and diagram is not None:
             img_obj = render_bible_diagram(
                 section.title, section.body, slide_num, total_sections,

@@ -66,30 +66,71 @@ PINK: RGB = (240, 110, 200)
 ROSE: RGB = (255, 120, 150)
 
 
+# Display heading weights (map to fonts.get_font keys). Heavier = more energy.
+EMPH_CALM = "display_semibold"   # Sora 600 - quiet, premium, trustworthy
+EMPH_STD = "display"             # Sora 700 - balanced default
+EMPH_BOLD = "black"              # Sora 800 - punchy, high-energy
+
+
 @dataclass(frozen=True)
 class Accent:
     """A curated accent identity: a primary/secondary pair for gradient text and
     dividers, a harmonized multi-item palette for card grids, and a mood that
-    drives the backdrop glow temperature."""
+    drives the backdrop glow temperature.
+
+    Each accent also carries a *psychological intent* (the feeling the color
+    family evokes) and a *heading_weight* (typographic emphasis) so the style
+    engine can map content emotion -> look in a principled, repeatable way.
+    """
     key: str
     mood: str                 # "cool" | "warm" | "neutral"
     primary: RGB
     secondary: RGB
     palette: tuple[RGB, ...]  # >=4 harmonized accents for numbered/key_points/etc.
+    intent: str = "calm"      # trust|calm|growth|innovation|creative|energy|bold
+    heading_weight: str = EMPH_STD
 
 
-# All combinations are bright on the midnight base, so any choice stays legible.
+# Color psychology: each accent is tagged with the emotion/intent it conveys, so
+# theme_engine can classify the content's dominant intent and map straight to a
+# look. All combinations are bright on the midnight base, so any choice is legible.
 ACCENTS: dict[str, Accent] = {
-    "teal_indigo": Accent("teal_indigo", "cool", TEAL, INDIGO, (TEAL, INDIGO, CYAN, GREEN)),
-    "blue_cyan": Accent("blue_cyan", "cool", CYAN, TEAL, (CYAN, TEAL, INDIGO, GREEN)),
-    "green_teal": Accent("green_teal", "cool", GREEN, TEAL, (GREEN, TEAL, CYAN, LIME)),
-    "violet_teal": Accent("violet_teal", "neutral", VIOLET, TEAL, (VIOLET, TEAL, PINK, GREEN)),
-    "indigo_pink": Accent("indigo_pink", "neutral", INDIGO, PINK, (INDIGO, PINK, TEAL, AMBER)),
-    "coral_amber": Accent("coral_amber", "warm", CORAL, AMBER, (CORAL, AMBER, PINK, VIOLET)),
-    "rose_violet": Accent("rose_violet", "warm", ROSE, VIOLET, (ROSE, VIOLET, AMBER, TEAL)),
+    # indigo+teal: focused, premium, authoritative -> deep technical explainers
+    "teal_indigo": Accent("teal_indigo", "cool", TEAL, INDIGO, (TEAL, INDIGO, CYAN, GREEN),
+                          intent="focus", heading_weight=EMPH_STD),
+    # cyan+teal: clean, trustworthy, dependable -> systems / infrastructure
+    "blue_cyan": Accent("blue_cyan", "cool", CYAN, TEAL, (CYAN, TEAL, INDIGO, GREEN),
+                        intent="trust", heading_weight=EMPH_STD),
+    # green+teal: growth, efficiency, positive outcomes -> benefits / optimization
+    "green_teal": Accent("green_teal", "cool", GREEN, TEAL, (GREEN, TEAL, CYAN, LIME),
+                         intent="growth", heading_weight=EMPH_STD),
+    # violet+teal: inventive, forward-looking -> innovation / new concepts
+    "violet_teal": Accent("violet_teal", "neutral", VIOLET, TEAL, (VIOLET, TEAL, PINK, GREEN),
+                          intent="innovation", heading_weight=EMPH_STD),
+    # indigo+pink: imaginative, expressive -> conceptual / creative / mixed
+    "indigo_pink": Accent("indigo_pink", "neutral", INDIGO, PINK, (INDIGO, PINK, TEAL, AMBER),
+                          intent="creative", heading_weight=EMPH_STD),
+    # coral+amber: warm, energetic, motivating -> people / value / action
+    "coral_amber": Accent("coral_amber", "warm", CORAL, AMBER, (CORAL, AMBER, PINK, VIOLET),
+                          intent="energy", heading_weight=EMPH_BOLD),
+    # rose+violet: bold, emotive, memorable -> persuasion / "why it matters"
+    "rose_violet": Accent("rose_violet", "warm", ROSE, VIOLET, (ROSE, VIOLET, AMBER, TEAL),
+                          intent="bold", heading_weight=EMPH_BOLD),
 }
 
 DEFAULT_ACCENT = "teal_indigo"
+
+# Map a classified emotional intent straight to a curated accent.
+INTENT_TO_ACCENT: dict[str, str] = {
+    "trust": "blue_cyan",
+    "calm": "blue_cyan",
+    "growth": "green_teal",
+    "focus": "teal_indigo",
+    "innovation": "violet_teal",
+    "creative": "indigo_pink",
+    "energy": "coral_amber",
+    "bold": "rose_violet",
+}
 
 # Backdrop glow colors per mood (deep, low-alpha washes - kept tasteful).
 _GLOWS: dict[str, tuple[RGB, ...]] = {
@@ -106,6 +147,8 @@ class VideoStyle:
     accent_key: str = DEFAULT_ACCENT
     mood: str = "cool"
     bg_intensity: str = "calm"        # "calm" | "rich"
+    intent: str = "focus"             # psychological intent the look conveys
+    heading_weight: str = EMPH_STD    # display weight for headings (fonts key)
 
     bg_top: RGB = BG_TOP
     bg_bottom: RGB = BG_BOTTOM
@@ -187,6 +230,8 @@ def build_style(accent_key: str = DEFAULT_ACCENT,
         accent_key=accent.key,
         mood=mood,
         bg_intensity=bg_intensity,
+        intent=accent.intent,
+        heading_weight=accent.heading_weight,
         bg_top=BG_TOP,
         bg_bottom=BG_BOTTOM,
         glows=_GLOWS[mood],

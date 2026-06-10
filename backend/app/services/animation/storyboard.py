@@ -167,7 +167,11 @@ def build_scenes(
         if template_name in ("numbered_reveal", "numbered"):
             extra["points"] = _extract_numbered_points(section.body, max_points=4)
 
-        if layout == "bible_diagram" and seg_diagram is not None:
+        if layout == "source_figure" and seg_diagram is not None:
+            # A real figure mined from the uploaded document - reveal + callouts.
+            extra["figure"] = seg_diagram
+            template_name = "source_figure"
+        elif layout == "bible_diagram" and seg_diagram is not None:
             # A real Cloud Bible figure (factual) always wins over a synthesized graph.
             extra["diagram"] = seg_diagram
             template_name = "bible_diagram"

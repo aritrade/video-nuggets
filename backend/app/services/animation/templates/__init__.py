@@ -669,6 +669,103 @@ def build_bible_diagram(ctx: TemplateContext) -> Scene:
     )
 
 
+# ---------------- Template: source_figure (any uploaded document) ----------------
+
+def _load_source_image(abs_path: Optional[str]) -> Optional[Image.Image]:
+    if not abs_path:
+        return None
+    try:
+        from pathlib import Path as _P
+        p = _P(abs_path)
+        return Image.open(p).convert("RGBA") if p.exists() else None
+    except Exception:
+        return None
+
+
+def build_source_figure(ctx: TemplateContext) -> Scene:
+    """Reveal a REAL figure mined from the uploaded source document, then animate
+    narration-synced callouts over it (highlight boxes + pulses sweeping across
+    regions) so the actual architecture diagram MOVES while it is explained.
+
+    Faithful by design: the source figure is shown as-is (not redrawn), so the
+    information stays accurate; only callouts/emphasis are animated on top.
+    """
+    cues: list[Cue] = []
+    duration = ctx.duration
+    accent = _accent_for(ctx.slide_num, ctx.theme)
+
+    figure = ctx.extra.get("figure") or {}
+    fig_img = _load_source_image(figure.get("abs_path"))
+    if fig_img is None:
+        return build_default(ctx)
+
+    # Panel coords mirror render_source_figure (panel_top default 360..970).
+    panel_x0, panel_x1 = 80, CANVAS_W - 80
+    panel_top, panel_bottom = 360, 970
+    panel_w = panel_x1 - panel_x0
+    panel_h = panel_bottom - panel_top
+    cx = panel_x0 + panel_w // 2
+    cy = panel_top + panel_h // 2
+
+    dw, dh = fig_img.size
+    scale = min((panel_w - 60) / dw, (panel_h - 60) / dh)
+    tw, th = max(1, int(dw * scale)), max(1, int(dh * scale))
+    scaled = fig_img.resize((tw, th), Image.LANCZOS)
+
+    reveal_at = 0.5
+    reveal_end = min(max(1.6, duration * 0.22), reveal_at + 1.4)
+    cues.append(Cue("diagram_reveal", reveal_at, reveal_end, {
+        "pil_image": scaled, "center": (cx, cy),
+        "glow": accent[0], "glow_alpha": 130, "scale_start": 0.9,
+    }, ease="out", z=10))
+
+    # Figure bounding box on the panel, for callout placement.
+    fx0, fy0 = cx - tw // 2, cy - th // 2
+    fx1, fy1 = cx + tw // 2, cy + th // 2
+
+    # Narration-synced callouts: sweep a highlight box across regions of the real
+    # figure as each beat fires, so attention tracks the voice and the diagram
+    # feels alive. Regions cycle across a 2x2 grid of the figure.
+    beats = ctx.extra.get("beats") or []
+    times = _resolve_beat_times(beats, ctx.word_timeline, duration) if beats else []
+    regions = [
+        (fx0, fy0, (fx0 + fx1) // 2, (fy0 + fy1) // 2),
+        ((fx0 + fx1) // 2, fy0, fx1, (fy0 + fy1) // 2),
+        (fx0, (fy0 + fy1) // 2, (fx0 + fx1) // 2, fy1),
+        ((fx0 + fx1) // 2, (fy0 + fy1) // 2, fx1, fy1),
+    ]
+    for i, t in enumerate(times):
+        if t < reveal_end:
+            t = reveal_end + 0.2 * i
+        rx0, ry0, rx1, ry1 = regions[i % len(regions)]
+        pad = 14
+        end_of_life = times[i + 1] if i + 1 < len(times) else duration
+        cues.append(Cue("highlight_box", t, min(t + 0.7, end_of_life), {
+            "box": (rx0 + pad, ry0 + pad, rx1 - pad, ry1 - pad),
+            "color": accent[i % 2], "width": 5, "radius": 16,
+        }, ease="out", z=20 + i, hold=max(0.0, end_of_life - t - 0.7)))
+        rcx, rcy = (rx0 + rx1) // 2, (ry0 + ry1) // 2
+        cues.append(Cue("pulse_ring", t, min(t + 1.4, end_of_life), {
+            "center": (rcx, rcy), "base_radius": 30, "max_radius": 120,
+            "color": accent[i % 2], "cycles": 2, "width": 3,
+        }, ease="linear", z=19 + i))
+
+    # Rolling beat captions (kinetic) or a single source caption.
+    if beats:
+        cues.extend(_beat_caption_cues(beats, ctx.word_timeline, duration))
+    else:
+        closing = (figure.get("caption") or figure.get("heading") or "").strip()
+        closing = f"From the source document - {closing}" if closing else "From the source document"
+        cues.append(_caption_cue(closing[:96], max(duration - 3.0, 0.5), duration))
+
+    return Scene(
+        title=ctx.title, duration=duration, audio_path=ctx.audio_path,
+        background_image=ctx.background_image, template="source_figure",
+        section_index=ctx.section_index, motion_seed=ctx.motion_seed,
+        beats=[Beat("source_figure", 0, duration, cues)],
+    )
+
+
 # ---------------- Template: default ----------------
 
 def build_default(ctx: TemplateContext) -> Scene:
@@ -912,6 +1009,7 @@ TEMPLATES = {
     "architecture": build_architecture_stack,
     "node_anatomy": build_node_anatomy,
     "bible_diagram": build_bible_diagram,
+    "source_figure": build_source_figure,
     "diagram": build_diagram,
     "default": build_default,
 }

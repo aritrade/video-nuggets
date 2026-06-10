@@ -32,7 +32,7 @@ import re
 from typing import Optional
 
 from app import llm
-from app.services import icon_library
+from app.services import diagram_synth, icon_library
 from app.services.content_parser import ContentSection, ParsedContent
 
 SCENE_TYPES = {"diagram", "numbered", "comparison", "analogy", "key_points", "default"}
@@ -166,10 +166,13 @@ def _validate_script(data: dict, section: ContentSection) -> Optional[dict]:
     if scene_type == "diagram":
         diagram = _validate_diagram(data.get("diagram"))
         if not diagram:
-            # No usable graph -> downgrade so we don't render an empty canvas.
-            script["scene_type"] = "key_points" if beats else "default"
-        else:
+            # The model wanted a diagram but gave no usable graph - synthesize one
+            # deterministically from the narration rather than downgrading to text.
+            diagram = diagram_synth.synthesize_diagram(section.body, section.title)
+        if diagram:
             script["diagram"] = diagram
+        else:
+            script["scene_type"] = "key_points" if beats else "default"
 
     return script
 
@@ -245,9 +248,6 @@ def _fallback_script(section: ContentSection, index: int, total: int) -> dict:
     scene_type = _detect_layout(section, index, total)
     if scene_type not in SCENE_TYPES:
         scene_type = "default"
-    # The fallback can't reliably invent a graph, so never claim "diagram".
-    if scene_type == "diagram":
-        scene_type = "key_points"
 
     sentences = _split_sentences(section.body)
     beats: list[dict] = []
@@ -261,8 +261,25 @@ def _fallback_script(section: ContentSection, index: int, total: int) -> dict:
         label = " ".join(sent.split()[:7]).rstrip(",.;:")
         beats.append({"anchor": anchor, "text": _clip(label, MAX_BEAT_CHARS)})
 
-    return {
+    script: dict = {
         "scene_type": scene_type,
         "headline": _clip(section.title, MAX_HEADLINE_CHARS),
         "beats": beats,
     }
+
+    # Visual-first bias: moving diagrams beat text. Try to synthesize a graph from
+    # the narration. If the detector asked for a diagram, we MUST have one; for the
+    # "texty" layouts (default/key_points) we upgrade to a diagram when one is
+    # available. Layouts with their own strong visuals (numbered/comparison/
+    # analogy) keep their template.
+    synth = diagram_synth.synthesize_diagram(section.body, section.title)
+    if scene_type == "diagram":
+        if synth:
+            script["diagram"] = synth
+        else:
+            script["scene_type"] = "key_points" if beats else "default"
+    elif synth and scene_type in ("default", "key_points"):
+        script["scene_type"] = "diagram"
+        script["diagram"] = synth
+
+    return script
