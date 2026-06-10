@@ -71,7 +71,7 @@ export default function Architecture() {
           <Box title="Static app · Vercel" tone="purple"
             lines={['React + Vite + Tailwind', 'Library · Watch · Chat', 'Architecture · Upload', 'served from the CDN']} />
           <Box title="Serverless · Vercel function" tone="teal"
-            lines={['/api/videos · /api/chat', 'grounded retrieval', 'Groq Llama-3 (if keyed)', 'deterministic fallback']} />
+            lines={['/api/videos · /api/chat', 'semantic search (MiniLM)', 'Groq Llama-3 (if keyed)', 'deterministic fallback']} />
           <Box title="Seed library (static)" tone="green"
             lines={['3 pre-rendered MP4s', 'VTT transcripts', 'thumbnails', 'served from /static']} />
         </div>

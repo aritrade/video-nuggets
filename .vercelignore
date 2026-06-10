@@ -4,5 +4,6 @@
 backend/
 lite/
 scripts/
+node_modules/
 **/__pycache__/
 **/.venv/

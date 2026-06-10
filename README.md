@@ -145,6 +145,7 @@ and live generation work. Leave it unset to run against the bundled static demo.
 ```sh
 cd backend && .venv/bin/python build_seed.py   # render sample docs into backend/seed/
 cd .. && python3 scripts/build_vercel_data.py  # publish seed to static assets + /api data
+npm install && node scripts/embed_corpus.mjs   # precompute MiniLM chunk embeddings for chat
 ```
 
 ---

@@ -3,6 +3,13 @@
   "buildCommand": "cd frontend && npm install && npm run build",
   "outputDirectory": "frontend/dist",
   "framework": null,
+  "functions": {
+    "api/index.js": {
+      "memory": 1769,
+      "maxDuration": 60,
+      "includeFiles": "api/_models/**"
+    }
+  },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index?p=$1" },
     { "source": "/((?!api/|static/|assets/).*)", "destination": "/index.html" }

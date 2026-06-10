@@ -7,9 +7,50 @@
 // retrieves over the committed transcripts (and uses Groq Llama-3 if a key is
 // configured, falling back to a deterministic synthesizer otherwise).
 
+const path = require('path');
 const library = require('./_data/library.json');
 const videos = require('./_data/videos.json');
 const corpus = require('./_data/corpus.json');
+const embeddings = require('./_data/embeddings.json');
+
+const MODEL_ID = embeddings.model || 'Xenova/all-MiniLM-L6-v2';
+
+// Lazily load the MiniLM feature-extractor once per warm container. The model
+// files are bundled under api/_models (see vercel.json includeFiles), so this
+// never hits the network. Any failure leaves _extractor null and the chat falls
+// back to keyword retrieval — so the endpoint can't break.
+let _extractorPromise = null;
+async function getExtractor() {
+  if (_extractorPromise) return _extractorPromise;
+  _extractorPromise = (async () => {
+    const { pipeline, env } = await import('@xenova/transformers');
+    env.cacheDir = path.join(__dirname, '_models');
+    env.allowRemoteModels = false;
+    env.allowLocalModels = true;
+    return pipeline('feature-extraction', MODEL_ID);
+  })().catch((err) => {
+    console.error('[chat] embedding model unavailable, using keyword fallback:', err && err.message);
+    return null;
+  });
+  return _extractorPromise;
+}
+
+async function semanticRetrieve(message, k = 3) {
+  const extractor = await getExtractor();
+  if (!extractor) return null;
+  const out = await extractor(message, { pooling: 'mean', normalize: true });
+  const q = Array.from(out.data);
+  const scored = corpus.map((c, i) => {
+    const v = embeddings.vectors[i] || [];
+    let dot = 0;
+    for (let j = 0; j < v.length; j++) dot += q[j] * v[j];
+    return { ...c, score: dot };
+  });
+  // Cosine of normalized MiniLM vectors: ~0.3+ is on-topic, near 0 is unrelated.
+  // Threshold so off-topic questions return no hits (-> "out of scope" reply).
+  const MIN_SIM = 0.2;
+  return scored.sort((a, b) => b.score - a.score).filter((c) => c.score >= MIN_SIM).slice(0, k);
+}
 
 const DEMO_USERS = {
   admin: { password: 'admin123', user: { id: 1, username: 'admin', display_name: 'Demo Admin', role: 'admin', email: 'admin@demo.local' } },
@@ -153,7 +194,17 @@ module.exports = async (req, res) => {
     const body = await readBody(req);
     const message = (body.message || '').toString();
     if (!message.trim()) return send(res, 400, { detail: 'message is required' });
-    const hits = retrieve(message);
+    let mode = 'semantic';
+    let hits = null;
+    try {
+      hits = await semanticRetrieve(message);
+    } catch (err) {
+      console.error('[chat] semantic retrieval failed:', err && err.message);
+    }
+    if (!hits) {
+      mode = 'keyword';
+      hits = retrieve(message);
+    }
     const answer = (await groqAnswer(message, hits)) || deterministicAnswer(message, hits);
     const cited = [];
     const seen = new Set();
@@ -165,6 +216,7 @@ module.exports = async (req, res) => {
     return send(res, 200, {
       response: answer,
       session_id: (body.session_id || randomId()).toString(),
+      retrieval: mode,
       cited_videos: cited,
       suggestions: [
         'How does distributed storage work?',
