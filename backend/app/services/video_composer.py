@@ -34,6 +34,7 @@ def compose_video(
     visualizations: list[str] = None,
     parsed_content=None,
     use_animation: bool = True,
+    style=None,
 ) -> dict:
     """Compose final video from slides and audio segments.
 
@@ -64,14 +65,18 @@ def compose_video(
 
     prev_omit = slide_image_generator.OMIT_FOCAL_ICONS
     prev_omit_body = slide_image_generator.OMIT_BODY_TEXT
+    prev_style = slide_image_generator.STYLE
     try:
         slide_image_generator.OMIT_FOCAL_ICONS = bool(use_animation)
         # Clean backdrops on generic layouts; kinetic beat captions carry the body.
         slide_image_generator.OMIT_BODY_TEXT = bool(use_animation)
+        # Apply the per-video look so static slides match the animated overlays.
+        slide_image_generator.use_style(style)
         slide_images, slide_layouts, slide_diagrams = render_slide_images_with_layouts(parsed_content, video_id, slides_dir)
     finally:
         slide_image_generator.OMIT_FOCAL_ICONS = prev_omit
         slide_image_generator.OMIT_BODY_TEXT = prev_omit_body
+        slide_image_generator.use_style(prev_style)
 
     if not slide_images:
         raise RuntimeError("No slide images were rendered")
@@ -81,7 +86,7 @@ def compose_video(
     if use_animation:
         scenes = build_scenes(
             parsed_content, audio_segments, slide_images,
-            layouts=slide_layouts, diagrams=slide_diagrams,
+            layouts=slide_layouts, diagrams=slide_diagrams, style=style,
         )
         for i, scene in enumerate(scenes):
             seg_path = str(VIDEOS_DIR / f"segment_{video_id}_{i:03d}.mp4")

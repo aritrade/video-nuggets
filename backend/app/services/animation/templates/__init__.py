@@ -30,6 +30,7 @@ from app.services.animation.primitives import (
     PURPLE, PURPLE_LIGHT, TEAL, GREEN, CORAL, YELLOW, PINK, WHITE,
 )
 from app.services.animation.types import Beat, Cue, Scene
+from app.services.theme import VideoStyle, DEFAULT_STYLE
 
 
 @dataclass
@@ -46,6 +47,9 @@ class TemplateContext:
     slide_num: int = 0
     total_slides: int = 0
     extra: dict = field(default_factory=dict)
+    # Resolved per-video look (accents/palette/mood). Populated from VideoStyle in
+    # storyboard.build_scenes so animated cues match the static slide colors.
+    theme: VideoStyle = field(default_factory=lambda: DEFAULT_STYLE)
 
 
 # Accent palettes mirror slide_image_generator.ACCENT_PALETTES (primary, secondary).
@@ -109,7 +113,10 @@ def _icon_path(concept: str, size: int = 512) -> Optional[str]:
     return str(icon_library.ASSETS_ROOT / rel)
 
 
-def _accent_for(slide_num: int) -> tuple:
+def _accent_for(slide_num: int, theme: Optional[VideoStyle] = None) -> tuple:
+    """Per-slide (primary, secondary) accent pair from the video's palette."""
+    if theme is not None:
+        return theme.pair_at(slide_num)
     return ACCENT_PALETTES[slide_num % len(ACCENT_PALETTES)]
 
 
@@ -296,7 +303,7 @@ def build_analogy(ctx: TemplateContext) -> Scene:
     """Reveals the focal icon center-left where the analogy slide expects it."""
     cues: list[Cue] = []
     duration = ctx.duration
-    accent = _accent_for(ctx.slide_num)
+    accent = _accent_for(ctx.slide_num, ctx.theme)
 
     concept = icon_library.best_concept_for_text(
         f"{ctx.title} {ctx.body}", fallback="lightbulb", title=ctx.title,
@@ -322,7 +329,8 @@ def build_analogy(ctx: TemplateContext) -> Scene:
     if beats:
         # Building bullet list in the right-hand text column (icon sits left).
         cues.extend(_beat_list_cues(beats, ctx.word_timeline, duration,
-                                    x=560, y0=430, line_gap=92, font_size=38))
+                                    x=560, y0=430, line_gap=92, font_size=38,
+                                    accents=list(ctx.theme.palette)))
     else:
         cues.append(_caption_cue(_first_sentence(ctx.body) or ctx.title,
                                  max(duration - 3.0, 0.5), duration))
@@ -595,7 +603,7 @@ def build_bible_diagram(ctx: TemplateContext) -> Scene:
     """
     cues: list[Cue] = []
     duration = ctx.duration
-    accent = _accent_for(ctx.slide_num)
+    accent = _accent_for(ctx.slide_num, ctx.theme)
 
     diagram = ctx.extra.get("diagram")
     if diagram is None:
@@ -667,7 +675,7 @@ def build_default(ctx: TemplateContext) -> Scene:
     """Default - icon reveals at the slide's center-right with a soft pulse."""
     cues: list[Cue] = []
     duration = ctx.duration
-    accent = _accent_for(ctx.slide_num)
+    accent = _accent_for(ctx.slide_num, ctx.theme)
 
     concept = icon_library.best_concept_for_text(
         f"{ctx.title} {ctx.body}", fallback="lightbulb", title=ctx.title,
@@ -691,7 +699,8 @@ def build_default(ctx: TemplateContext) -> Scene:
     if beats:
         # Fill the (otherwise empty) body area with a building bullet list.
         cues.extend(_beat_list_cues(beats, ctx.word_timeline, duration,
-                                    x=90, y0=470, line_gap=96))
+                                    x=90, y0=470, line_gap=96,
+                                    accents=list(ctx.theme.palette)))
     else:
         cues.append(_caption_cue(_first_sentence(ctx.body) or ctx.title,
                                  max(duration - 3.0, 0.5), duration))
@@ -745,7 +754,7 @@ def build_diagram(ctx: TemplateContext) -> Scene:
     pad_x = min(40, cell_w * 0.10)
     pad_y = min(40, cell_h * 0.12)
 
-    palette = [TEAL, GREEN, CORAL, PURPLE_LIGHT, YELLOW, PINK]
+    palette = list(ctx.theme.palette)
     geom: dict[str, dict] = {}
     for i, node in enumerate(nodes):
         col = max(0, min(node.get("col", i % cols), cols - 1))
@@ -801,7 +810,7 @@ def build_diagram(ctx: TemplateContext) -> Scene:
         if flow_start < duration - 0.6:
             cycles = max(1, int((duration - flow_start) / 2.2))
             cues.append(Cue("flow_dot", flow_start, max(duration - 0.4, flow_start + 1.0), {
-                "start": p_start, "end": p_end, "color": GREEN,
+                "start": p_start, "end": p_end, "color": ctx.theme.accent,
                 "radius": 9, "cycles": cycles,
             }, ease="linear", z=40 + j))
 

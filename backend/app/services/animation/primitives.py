@@ -33,6 +33,7 @@ from typing import Optional
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from app import config
+from app.services import fonts
 
 # Templates author against a fixed 1920x1080 "design space" (CANVAS_W/H below).
 # The compositor, however, renders at config.RENDER_W/H (default 1280x720) for
@@ -60,31 +61,11 @@ WHITE = (255, 255, 255)
 TEXT_MUTED = (180, 190, 220)
 
 
-# ---------------- Font helper (mirrors slide_image_generator) ----------------
-
-_FONT_CACHE: dict[tuple[str, int], ImageFont.FreeTypeFont] = {}
-
-_SYSTEM_FONT_CANDIDATES = {
-    "regular": ["/System/Library/Fonts/Supplemental/Arial.ttf", "/System/Library/Fonts/Helvetica.ttc"],
-    "bold": ["/System/Library/Fonts/Supplemental/Arial Bold.ttf", "/System/Library/Fonts/Helvetica.ttc"],
-    "black": ["/System/Library/Fonts/Supplemental/Arial Black.ttf", "/System/Library/Fonts/Helvetica.ttc"],
-}
-
+# ---------------- Font helper (shared bundled typography) ----------------
 
 def _font(weight: str, size: int) -> ImageFont.FreeTypeFont:
-    key = (weight, size)
-    if key in _FONT_CACHE:
-        return _FONT_CACHE[key]
-    for path in _SYSTEM_FONT_CANDIDATES.get(weight, []):
-        if Path(path).exists():
-            try:
-                f = ImageFont.truetype(path, size=size)
-                _FONT_CACHE[key] = f
-                return f
-            except Exception:
-                continue
-    _FONT_CACHE[key] = ImageFont.load_default()
-    return _FONT_CACHE[key]
+    """Bundled Sora (display) / Inter (text) fonts; see app/services/fonts.py."""
+    return fonts.get_font(weight, size)
 
 
 # ---------------- Color helpers ----------------

@@ -20,6 +20,7 @@ from app import config
 from app.services.content_parser import parse_source
 from app.services.content_simplifier import simplify_content
 from app.services.storyboard_llm import generate_visual_scripts
+from app.services.theme_engine import decide_video_style
 from app.services.tts_service import generate_narration
 from app.services.video_composer import compose_video
 
@@ -128,9 +129,11 @@ async def main() -> None:
         if i < len(parsed.sections):
             parsed.sections[i].preferred_layout = layout
     await generate_visual_scripts(parsed)  # respects the pinned scripts above
+    style = await decide_video_style(parsed)
+    print(f"[recreate_demo] style={style.accent_key} mood={style.mood} bg={style.bg_intensity}")
 
     audio = await generate_narration(parsed, VIDEO_ID)
-    result = compose_video(VIDEO_ID, None, audio, [], parsed_content=parsed)
+    result = compose_video(VIDEO_ID, None, audio, [], parsed_content=parsed, style=style)
     print(f"[recreate_demo] rendered {result['video_path']} "
           f"({result['duration_seconds']:.1f}s)")
 

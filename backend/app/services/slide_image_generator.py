@@ -24,9 +24,13 @@ from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
+import numpy as np
+
 from app.services.content_parser import ParsedContent, ContentSection
 from app.services import icon_library
 from app.services import bible_diagrams
+from app.services import fonts
+from app.services import theme
 
 OMIT_FOCAL_ICONS = False
 """When True, layout functions skip focal/decorative brand icons so the
@@ -71,33 +75,30 @@ ACCENT_PALETTES = [
     (TEAL, GREEN),
 ]
 
-FONT_PATHS = {
-    "regular": [
-        "/System/Library/Fonts/Supplemental/Arial.ttf",
-        "/Library/Fonts/Arial.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    ],
-    "bold": [
-        "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
-        "/Library/Fonts/Arial Bold.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-    ],
-    "black": [
-        "/System/Library/Fonts/Supplemental/Arial Black.ttf",
-        "/Library/Fonts/Arial Black.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-    ],
-}
+# Per-video resolved look (fonts, palette, background, text colors). The
+# composer sets this via use_style() before rendering a video's slides; it
+# defaults to the signature style so standalone/test calls still render on-brand.
+STYLE: theme.VideoStyle = theme.DEFAULT_STYLE
 
+
+def use_style(style: Optional[theme.VideoStyle]) -> None:
+    """Set the active VideoStyle for subsequent slide rendering."""
+    global STYLE
+    STYLE = style or theme.DEFAULT_STYLE
+
+
+def _accent_pair(slide_num: int) -> tuple:
+    """A (primary, secondary) accent pair for the slide, within the video's
+    chosen on-brand palette (replaces index-cycled ACCENT_PALETTES)."""
+    return STYLE.pair_at(slide_num)
 
 def _font(weight: str, size: int) -> ImageFont.FreeTypeFont:
-    for path in FONT_PATHS.get(weight, FONT_PATHS["regular"]):
-        if os.path.exists(path):
-            try:
-                return ImageFont.truetype(path, size)
-            except Exception:
-                continue
-    return ImageFont.load_default()
+    """Resolve a logical weight to a bundled font (Sora display / Inter text).
+
+    Display weight names ("black", "display") map to Sora; the rest to Inter.
+    See app/services/fonts.py for the single source-of-truth mapping.
+    """
+    return fonts.get_font(weight, size)
 
 
 def _make_gradient(size, top_color, bottom_color, direction="vertical"):
@@ -131,27 +132,58 @@ def _glow_circle(size, color, alpha=180):
     return img
 
 
+def _apply_vignette(img: Image.Image, strength: float = 0.30) -> Image.Image:
+    """Darken toward the edges so the eye settles on the content."""
+    w, h = img.size
+    yy, xx = np.mgrid[0:h, 0:w]
+    cx, cy = w / 2.0, h / 2.0
+    d = np.sqrt(((xx - cx) / cx) ** 2 + ((yy - cy) / cy) ** 2)
+    v = np.clip(1.0 - strength * (d ** 2), 0.0, 1.0)
+    arr = np.asarray(img).astype(np.float32) * v[..., None]
+    return Image.fromarray(arr.clip(0, 255).astype("uint8"))
+
+
+def _apply_grain(img: Image.Image, amount: float = 5.0, seed: int = 0) -> Image.Image:
+    """Add faint monochrome grain to kill gradient banding (premium feel)."""
+    w, h = img.size
+    rng = np.random.default_rng(seed & 0xFFFFFFFF)
+    noise = rng.normal(0.0, amount, (h, w, 1)).astype(np.float32)
+    arr = np.asarray(img).astype(np.float32) + noise
+    return Image.fromarray(arr.clip(0, 255).astype("uint8"))
+
+
+# Deterministic glow anchor points (fractions of canvas), ordered by prominence.
+_GLOW_ANCHORS = [(0.16, 0.18), (0.85, 0.30), (0.30, 0.88), (0.74, 0.80)]
+
+
 def _base_canvas(seed: int = 0) -> Image.Image:
-    """Create the base background with subtle decorative elements."""
-    rng = random.Random(seed)
-    bg = _make_gradient(
-        (CANVAS_W, CANVAS_H),
-        (8, 8, 35),
-        (18, 12, 60),
-        direction="vertical",
-    )
+    """Signature midnight backdrop for every slide.
+
+    A smooth deep gradient, a few softly-blurred glows placed deterministically
+    and tinted by the video's mood, a radial vignette, and faint grain. No more
+    scattered random blobs - the look is consistent and intentional, and only
+    the glow tint/intensity vary per video via STYLE.
+    """
+    st = STYLE
+    bg = _make_gradient((CANVAS_W, CANVAS_H), st.bg_top, st.bg_bottom, direction="vertical")
     overlay = Image.new("RGBA", bg.size, (0, 0, 0, 0))
 
-    for _ in range(6):
-        size = rng.randint(220, 480)
-        x = rng.randint(-100, CANVAS_W - 100)
-        y = rng.randint(-100, CANVAS_H - 100)
-        color = rng.choice([PURPLE_LIGHT, TEAL, PURPLE_DEEP, BLUE])
-        glow = _glow_circle(size, color, alpha=rng.randint(35, 70))
+    rng = random.Random(seed)
+    n_glow = 3 if st.bg_intensity == "rich" else 2
+    base_alpha = 48 if st.bg_intensity == "rich" else 34
+    for i in range(n_glow):
+        ax, ay = _GLOW_ANCHORS[i % len(_GLOW_ANCHORS)]
+        size = int(CANVAS_W * (0.46 if i == 0 else 0.34))
+        x = int(ax * CANVAS_W - size / 2) + rng.randint(-50, 50)
+        y = int(ay * CANVAS_H - size / 2) + rng.randint(-40, 40)
+        color = st.glows[i % len(st.glows)]
+        glow = _glow_circle(size, color, alpha=base_alpha)
         overlay.paste(glow, (x, y), glow)
 
-    bg = Image.alpha_composite(bg.convert("RGBA"), overlay)
-    return bg.convert("RGB")
+    bg = Image.alpha_composite(bg.convert("RGBA"), overlay).convert("RGB")
+    bg = _apply_vignette(bg, strength=0.30)
+    bg = _apply_grain(bg, amount=5.0, seed=seed)
+    return bg
 
 
 def _rounded_rect(draw: ImageDraw.ImageDraw, xy, radius, fill=None, outline=None, width=1):
@@ -223,8 +255,11 @@ def _draw_gradient_text(img: Image.Image, xy, text: str, font, color1, color2, a
     img.paste(grad, (paste_x, paste_y), mask)
 
 
-def _draw_pill(img, xy, text, fg=WHITE, bg=PURPLE_LIGHT, font_size=24, padding=(20, 8), radius=20):
-    """Draw a pill/badge with text inside."""
+def _draw_pill(img, xy, text, fg=None, bg=None, font_size=24, padding=(20, 8), radius=20):
+    """Draw a pill/badge with text inside. Defaults to the video's accent with
+    dark ink text so it stays legible on bright accents (teal/amber)."""
+    bg = bg or STYLE.accent
+    fg = fg if fg is not None else (12, 14, 32)
     font = _font("bold", font_size)
     draw_temp = ImageDraw.Draw(img)
     bbox = draw_temp.textbbox((0, 0), text, font=font)
@@ -242,8 +277,10 @@ def _draw_pill(img, xy, text, fg=WHITE, bg=PURPLE_LIGHT, font_size=24, padding=(
     return img, pill_w, pill_h
 
 
-def _logo_n(img: Image.Image, xy, size=64, color1=PURPLE_LIGHT, color2=TEAL):
-    """Draw the Nutanix-style 'N' badge."""
+def _logo_n(img: Image.Image, xy, size=64, color1=None, color2=None):
+    """Draw the product 'N' badge using the video's accent gradient."""
+    color1 = color1 or STYLE.accent2
+    color2 = color2 or STYLE.accent
     draw_temp = ImageDraw.Draw(img)
     overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(overlay)
@@ -279,7 +316,7 @@ def _footer(img: Image.Image, video_title: str, slide_num: int, total_slides: in
         outline=(255, 255, 255, 60),
         width=2,
     )
-    draw.text((CANVAS_W - 60 - cw // 2 - 6, CANVAS_H - 60), counter, font=cf, fill=TEAL, anchor="mm")
+    draw.text((CANVAS_W - 60 - cw // 2 - 6, CANVAS_H - 60), counter, font=cf, fill=STYLE.accent, anchor="mm")
     return img
 
 
@@ -346,9 +383,9 @@ def render_hero(title: str, subtitle: str = "Video Nuggets OS") -> Image.Image:
         icon_cx = 280
         icon_cy = CANVAS_H // 2
         img = _draw_disc(img, (icon_cx, icon_cy), 220,
-                         fill=PURPLE_LIGHT + (40,), outline=TEAL + (200,), outline_w=3)
+                         fill=STYLE.accent2 + (40,), outline=STYLE.accent + (200,), outline_w=3)
         img = _paste_icon(img, hero_icon, (icon_cx, icon_cy), 320,
-                          glow_color=PURPLE_LIGHT, glow_alpha=160)
+                          glow_color=STYLE.accent2, glow_alpha=160)
 
     img = _logo_n(img, (560, 220), size=80)
 
@@ -358,15 +395,14 @@ def render_hero(title: str, subtitle: str = "Video Nuggets OS") -> Image.Image:
     lines = _wrap_text(title, title_font, CANVAS_W - title_x - 80, draw)
     y = 340
     for line in lines[:3]:
-        _draw_gradient_text(img, (title_x, y), line, title_font, TEAL, PURPLE_LIGHT)
+        _draw_gradient_text(img, (title_x, y), line, title_font, STYLE.accent, STYLE.accent2)
         y += 110
 
     sf = _font("regular", 32)
     draw = ImageDraw.Draw(img)
     draw.text((title_x, y + 20), subtitle, font=sf, fill=TEXT_MUTED)
 
-    img, _, _ = _draw_pill(img, (title_x, y + 80), "Learn it the fun way",
-                           bg=PURPLE_LIGHT, font_size=26)
+    img, _, _ = _draw_pill(img, (title_x, y + 80), "Learn it the fun way", font_size=26)
     return img
 
 
@@ -374,7 +410,7 @@ def render_hero(title: str, subtitle: str = "Video Nuggets OS") -> Image.Image:
 
 def render_analogy(title: str, body: str, slide_num: int, total: int, video_title: str, accent=None) -> Image.Image:
     img = _base_canvas(seed=hash(title) & 0xFFFF)
-    accent = accent or ACCENT_PALETTES[slide_num % len(ACCENT_PALETTES)]
+    accent = accent or _accent_pair(slide_num)
 
     img, _, _ = _draw_pill(img, (80, 80), f"ANALOGY {slide_num:02d}", bg=accent[0], font_size=24)
 
@@ -463,7 +499,7 @@ def render_comparison(title: str, body: str, slide_num: int, total: int, video_t
     title_lines = _wrap_text(title, title_font, CANVAS_W - 160, draw)
     y = 160
     for line in title_lines[:2]:
-        _draw_gradient_text(img, (80, y), line, title_font, TEAL, PURPLE_LIGHT)
+        _draw_gradient_text(img, (80, y), line, title_font, STYLE.accent, STYLE.accent2)
         y += 76
 
     card_w = 760
@@ -533,7 +569,7 @@ def render_numbered(title: str, body: str, slide_num: int, total: int, video_tit
     title_lines = _wrap_text(title, title_font, CANVAS_W - 160, draw)
     y = 160
     for line in title_lines[:2]:
-        _draw_gradient_text(img, (80, y), line, title_font, GREEN, TEAL)
+        _draw_gradient_text(img, (80, y), line, title_font, STYLE.accent, STYLE.accent2)
         y += 76
 
     points = _extract_numbered_points(body)
@@ -554,7 +590,7 @@ def render_numbered(title: str, body: str, slide_num: int, total: int, video_tit
     grid_x0 = 100
     grid_y0 = 360
 
-    palette = [TEAL, GREEN, CORAL, PINK, YELLOW, PURPLE_LIGHT]
+    palette = list(STYLE.palette)
 
     for i, point in enumerate(points[: cols * rows]):
         c = i % cols
@@ -595,12 +631,12 @@ def render_key_points(title: str, body: str, slide_num: int, total: int, video_t
     title_lines = _wrap_text(title, title_font, CANVAS_W - 160, draw)
     y = 160
     for line in title_lines[:2]:
-        _draw_gradient_text(img, (80, y), line, title_font, PURPLE_LIGHT, TEAL)
+        _draw_gradient_text(img, (80, y), line, title_font, STYLE.accent, STYLE.accent2)
         y += 76
 
     points = _extract_sentences(body, 4)
     bf = _font("regular", 24)
-    palette = [TEAL, CORAL, GREEN, YELLOW]
+    palette = list(STYLE.palette)
 
     card_y = 380
     card_w = (CANVAS_W - 240) // min(len(points), 4)
@@ -651,7 +687,7 @@ def render_architecture(title: str, body: str, slide_num: int, total: int, video
     title_lines = _wrap_text(title, title_font, CANVAS_W - 160, draw)
     y = 160
     for line in title_lines[:2]:
-        _draw_gradient_text(img, (80, y), line, title_font, TEAL, PURPLE_LIGHT)
+        _draw_gradient_text(img, (80, y), line, title_font, STYLE.accent, STYLE.accent2)
         y += 76
 
     layers = [
@@ -710,7 +746,7 @@ def render_bible_diagram(
         - Standard footer
     """
     img = _base_canvas(seed=hash(title) & 0xFFFF)
-    accent = ACCENT_PALETTES[slide_num % len(ACCENT_PALETTES)]
+    accent = _accent_pair(slide_num)
 
     page_no = diagram.get("page", 0)
     img, _, _ = _draw_pill(img, (80, 80),
@@ -781,7 +817,7 @@ def render_bible_diagram(
 
 def render_default(title: str, body: str, slide_num: int, total: int, video_title: str) -> Image.Image:
     img = _base_canvas(seed=hash(title) & 0xFFFF)
-    accent = ACCENT_PALETTES[slide_num % len(ACCENT_PALETTES)]
+    accent = _accent_pair(slide_num)
 
     img, _, _ = _draw_pill(img, (80, 80), f"PART {slide_num:02d} OF {total:02d}", bg=accent[0], font_size=24)
 
@@ -867,7 +903,7 @@ def render_outro(video_title: str) -> Image.Image:
     img = _logo_n(img, (CANVAS_W // 2 - 50, 200), size=100)
 
     title_font = _font("black", 96)
-    _draw_gradient_text(img, (CANVAS_W // 2, 360), "Thanks for Watching!", title_font, TEAL, PURPLE_LIGHT, anchor="mt")
+    _draw_gradient_text(img, (CANVAS_W // 2, 360), "Thanks for Watching!", title_font, STYLE.accent, STYLE.accent2, anchor="mt")
 
     sub = _font("regular", 38)
     draw = ImageDraw.Draw(img)

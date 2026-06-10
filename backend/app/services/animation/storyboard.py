@@ -22,6 +22,7 @@ from typing import Optional
 from app.services.animation.templates import TemplateContext, build as build_template
 from app.services.animation.types import Scene
 from app.services.content_parser import ParsedContent, ContentSection
+from app.services.theme import VideoStyle, DEFAULT_STYLE
 
 
 NODE_ANATOMY_TITLE_KEYWORDS = [
@@ -97,6 +98,7 @@ def build_scenes(
     slide_paths: list[str],
     layouts: Optional[list[str]] = None,
     diagrams: Optional[list[Optional[dict]]] = None,
+    style: Optional[VideoStyle] = None,
 ) -> list[Scene]:
     """Build one Scene per audio segment.
 
@@ -106,9 +108,13 @@ def build_scenes(
 
     `diagrams` is a parallel list of Cloud Bible diagram manifests (or None)
     so the bible_diagram animation template can reveal the matched figure.
+
+    `style` is the resolved per-video VideoStyle; its palette/accents drive the
+    animated cue colors so they match the static slide backgrounds.
     """
     scenes: list[Scene] = []
     sections = content.sections
+    style = style or DEFAULT_STYLE
 
     for i, seg in enumerate(audio_segments):
         audio_path = seg["path"]
@@ -127,6 +133,7 @@ def build_scenes(
                 audio_path=audio_path, background_image=bg_path,
                 section_index=-1, motion_seed=0,
                 word_timeline=timeline, layout="hero",
+                theme=style,
             )
             scenes.append(build_template("hero", ctx))
             continue
@@ -138,6 +145,7 @@ def build_scenes(
                 audio_path=audio_path, background_image=bg_path,
                 section_index=-2, motion_seed=4,
                 word_timeline=timeline, layout="outro",
+                theme=style,
             )
             scenes.append(build_template("outro", ctx))
             continue
@@ -180,7 +188,7 @@ def build_scenes(
             section_index=idx, motion_seed=(idx + 1) % 5,
             word_timeline=timeline, layout=layout,
             slide_num=idx + 1, total_slides=len(sections),
-            extra=extra,
+            extra=extra, theme=style,
         )
         scenes.append(build_template(template_name, ctx))
 

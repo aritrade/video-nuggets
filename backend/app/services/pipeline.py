@@ -10,6 +10,7 @@ from app.models.database import SessionLocal, Video, VideoStatus
 from app.services.content_parser import parse_source
 from app.services.content_simplifier import simplify_content
 from app.services.storyboard_llm import generate_visual_scripts
+from app.services.theme_engine import decide_video_style
 from app.services.visualization_gen import (
     generate_comparison_chart,
     generate_architecture_diagram,
@@ -52,6 +53,8 @@ async def _async_direct_pipeline(video_id: int, parsed):
 
         # Pre-authored narration still gets an animated storyboard.
         await generate_visual_scripts(parsed)
+        # Decide the cohesive per-video look (accents/mood/background).
+        style = await decide_video_style(parsed)
 
         visualizations = _generate_visualizations(parsed)
         slides_path = generate_slides(parsed, video_id, visualizations)
@@ -66,6 +69,7 @@ async def _async_direct_pipeline(video_id: int, parsed):
             audio_segments,
             visualizations,
             parsed_content=parsed,
+            style=style,
         )
 
         video.video_path = result["video_path"]
@@ -116,6 +120,8 @@ async def _async_pipeline(video_id: int, source_path: str):
         # Author the per-section visual storyboard (scene type + beats + diagram)
         # used by the animation engine. Always succeeds (deterministic fallback).
         await generate_visual_scripts(simplified)
+        # Decide the cohesive per-video look (accents/mood/background).
+        style = await decide_video_style(simplified)
 
         visualizations = _generate_visualizations(simplified)
 
@@ -131,6 +137,7 @@ async def _async_pipeline(video_id: int, source_path: str):
             audio_segments,
             visualizations,
             parsed_content=simplified,
+            style=style,
         )
 
         video.video_path = result["video_path"]
