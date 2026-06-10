@@ -3,17 +3,22 @@
 # everything from one URL. The Vercel deploy (instant static demo) is separate
 # and unaffected.
 #
-# Plan note: the pipeline runs ffmpeg + Edge TTS + an ONNX embedder. The 512 MB
-# free/Starter tiers will OOM on real documents — use Standard (2 GB) for
-# reliable live generation. To run free instead: set `plan: free`, delete the
-# `disk:` block, and expect occasional OOM on larger uploads + cold-start sleep.
+# Plan note: this is set to the FREE tier so deploying requires no payment info.
+# Caveats of free: 512 MB RAM (can OOM on larger uploads during ffmpeg +
+# embedding), the service sleeps after ~15 min idle (30-60s cold start), and
+# there's no persistent disk (the seed library reloads on every boot; user-
+# generated nuggets are cleared on restart).
+#
+# To make live generation reliable later, upgrade in the Render dashboard (or
+# set `plan: standard` here) and optionally re-add a `disk:` block for
+# persistence — both require a card on file.
 services:
   - type: web
     name: video-nuggets-os
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    plan: standard
+    plan: free
     region: oregon
     healthCheckPath: /api/health
     autoDeploy: true
@@ -31,10 +36,3 @@ services:
         value: llama-3.1-8b-instant
       - key: EDGE_TTS_VOICE
         value: en-US-AndrewNeural
-    # Persist the SQLite DB + generated media across deploys/restarts. The seed
-    # library always reloads on boot; this keeps user-generated nuggets too.
-    # (Requires a paid plan. Remove this block to run on the free tier.)
-    disk:
-      name: data
-      mountPath: /app/output
-      sizeGB: 2

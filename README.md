@@ -174,10 +174,11 @@ so a single URL is the whole app.
 
 1. In Render: **New → Blueprint**, point it at this repo. `render.yaml` provisions
    a Docker web service from the root `Dockerfile` with a `/api/health` check.
-2. Pick a plan: the pipeline runs `ffmpeg` + Edge TTS + an ONNX embedder, so
-   **512 MB (free/Starter) will OOM on real documents — use Standard (2 GB)** for
-   reliable generation. (To run free: set `plan: free` and remove the `disk:`
-   block in `render.yaml`; expect occasional OOM + cold-start sleep.)
+2. Plan: `render.yaml` ships with `plan: free` so **deploying needs no payment
+   info**. Free is 512 MB and sleeps when idle, so it can OOM on larger uploads
+   during `ffmpeg` + embedding and cold-starts in 30–60s. For reliable live
+   generation, upgrade to **Standard (2 GB)** in the dashboard (or set
+   `plan: standard` + add a `disk:` block) — those require a card on file.
 3. (Optional) Set `GROQ_API_KEY` to sharpen the "simplify" text and chat.
 4. Generation is open (`DEMO_MODE=true`) so anyone can upload and try it.
 
