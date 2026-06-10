@@ -1,6 +1,11 @@
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
+// When set (on the static Vercel demo), surface a CTA to the full live app
+// where uploads + document-to-video generation actually run. Hidden on the
+// live app itself, which doesn't define this var.
+const LIVE_APP_URL = import.meta.env.VITE_LIVE_APP_URL as string | undefined
+
 export default function Navbar() {
   const location = useLocation()
   const { user, isAdmin, logout } = useAuth()
@@ -51,6 +56,18 @@ export default function Navbar() {
           </div>
 
           <div className="flex items-center gap-3">
+            {LIVE_APP_URL && (
+              <a
+                href={LIVE_APP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden sm:inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-brand-teal/40 text-brand-teal hover:bg-brand-teal/10 transition-colors font-medium"
+                title="Open the full app where uploads and video generation run live"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-brand-green animate-pulse" />
+                Try live generation
+              </a>
+            )}
             {user ? (
               <>
                 <span className="text-xs px-2.5 py-1 rounded-full bg-brand-purple-light/20 text-brand-purple-light font-medium">

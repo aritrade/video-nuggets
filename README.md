@@ -165,6 +165,29 @@ vercel --prod        # from the repo root (uses the authenticated Vercel CLI)
   without it.
 - No `VITE_API_URL` is needed in production — the app calls its own origin.
 
+### Optional: the full live app on Render (real video generation)
+
+The Vercel build is a static snapshot. To let people **upload a document and
+watch the pipeline render a video live**, deploy the all-in-one image on Render.
+One web service builds the frontend, serves it, and runs the FastAPI pipeline —
+so a single URL is the whole app.
+
+1. In Render: **New → Blueprint**, point it at this repo. `render.yaml` provisions
+   a Docker web service from the root `Dockerfile` with a `/api/health` check.
+2. Pick a plan: the pipeline runs `ffmpeg` + Edge TTS + an ONNX embedder, so
+   **512 MB (free/Starter) will OOM on real documents — use Standard (2 GB)** for
+   reliable generation. (To run free: set `plan: free` and remove the `disk:`
+   block in `render.yaml`; expect occasional OOM + cold-start sleep.)
+3. (Optional) Set `GROQ_API_KEY` to sharpen the "simplify" text and chat.
+4. Generation is open (`DEMO_MODE=true`) so anyone can upload and try it.
+
+The same image works because the frontend uses a **relative API base**: on Render
+`/api/*` is the real FastAPI; on Vercel it's the static-demo function.
+
+**Link the two:** set `VITE_LIVE_APP_URL` (Vercel env var) to your Render URL and
+redeploy Vercel — a "Try live generation" CTA then appears on the static demo,
+pointing hiring teams at the live app. The two deployments are independent.
+
 ---
 
 ## Project structure
@@ -182,8 +205,11 @@ video-nuggets/
 ├── frontend/                 # React + Vite + Tailwind app
 │   └── public/static/        # rendered MP4s / VTT / thumbnails served by Vercel
 ├── scripts/
-│   └── build_vercel_data.py  # seed → static assets + /api data bridge
-└── vercel.json               # build + SPA + /api routing
+│   ├── build_vercel_data.py  # seed → static assets + /api data bridge
+│   └── embed_corpus.mjs      # precompute MiniLM chat embeddings
+├── Dockerfile                # all-in-one image (frontend + FastAPI) for Render
+├── render.yaml               # Render blueprint (full live app)
+└── vercel.json               # build + SPA + /api routing (static demo)
 ```
 
 ---

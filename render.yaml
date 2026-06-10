@@ -1,0 +1,40 @@
+# Render blueprint for the FULL app (live document-to-video generation).
+# Builds the all-in-one Docker image (frontend + FastAPI pipeline) and serves
+# everything from one URL. The Vercel deploy (instant static demo) is separate
+# and unaffected.
+#
+# Plan note: the pipeline runs ffmpeg + Edge TTS + an ONNX embedder. The 512 MB
+# free/Starter tiers will OOM on real documents — use Standard (2 GB) for
+# reliable live generation. To run free instead: set `plan: free`, delete the
+# `disk:` block, and expect occasional OOM on larger uploads + cold-start sleep.
+services:
+  - type: web
+    name: video-nuggets-os
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: standard
+    region: oregon
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      # Open generation so hiring teams can upload + generate without a login.
+      - key: DEMO_MODE
+        value: "true"
+      - key: SECRET_KEY
+        generateValue: true
+      # Optional free Groq Llama-3 key — sharpens the "simplify" text and chat.
+      # Generation works fully without it (deterministic). Add later in the UI.
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.1-8b-instant
+      - key: EDGE_TTS_VOICE
+        value: en-US-AndrewNeural
+    # Persist the SQLite DB + generated media across deploys/restarts. The seed
+    # library always reloads on boot; this keeps user-generated nuggets too.
+    # (Requires a paid plan. Remove this block to run on the free tier.)
+    disk:
+      name: data
+      mountPath: /app/output
+      sizeGB: 2

@@ -1,0 +1,10 @@
+**/node_modules
+**/.venv
+**/__pycache__
+**/dist
+backend/output
+backend/video_nuggets.db
+lite
+api/_models
+.git
+.vercel

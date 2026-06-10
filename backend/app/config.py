@@ -14,6 +14,11 @@ CHROMA_DIR = OUTPUT_DIR / "chromadb"
 # Committed seed assets (pre-rendered demo nuggets + transcripts + chroma index).
 SEED_DIR = BASE_DIR / "seed"
 
+# Optional: path to the built frontend (Vite dist). When set, the API process
+# also serves the SPA from the same origin — used by the all-in-one Render
+# deploy so one URL is the whole app. Left empty for local dev / Vercel.
+FRONTEND_DIST = os.getenv("FRONTEND_DIST", "")
+
 for d in [OUTPUT_DIR, VIDEOS_DIR, SLIDES_DIR, AUDIO_DIR, THUMBNAILS_DIR,
           TRANSCRIPTS_DIR, VISUALIZATIONS_DIR, UPLOADS_DIR, CHROMA_DIR]:
     d.mkdir(parents=True, exist_ok=True)

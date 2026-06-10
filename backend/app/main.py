@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.models.database import init_db, SessionLocal
@@ -61,6 +63,30 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "video-nuggets-os",
+        "mode": "full-backend",
         "llm_provider": config.LLM_PROVIDER,
         "demo_mode": config.DEMO_MODE,
+        "live_generation": True,
     }
+
+
+# ── Serve the built SPA (all-in-one deploy) ──────────────────────────────────
+# When FRONTEND_DIST points at a Vite build, this process serves the frontend
+# from the same origin as the API, so a single Render URL is the whole app
+# (live upload + generation included). Registered last so it never shadows the
+# /api/* routers or the /static/* mounts above.
+_DIST = Path(config.FRONTEND_DIST) if config.FRONTEND_DIST else None
+if _DIST and _DIST.is_dir():
+    _INDEX = _DIST / "index.html"
+    _assets = _DIST / "assets"
+    if _assets.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(_assets)), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def spa(full_path: str):
+        if full_path.startswith(("api/", "static/")):
+            raise HTTPException(status_code=404, detail="Not found")
+        candidate = _DIST / full_path
+        if full_path and candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(_INDEX)
