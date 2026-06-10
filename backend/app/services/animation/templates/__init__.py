@@ -17,6 +17,7 @@ scene, and a soft pulse ring around revealed icons to keep the screen alive.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -26,7 +27,7 @@ from app.services import icon_library
 from app.services import bible_diagrams
 from app.services.animation.primitives import (
     CANVAS_W, CANVAS_H,
-    PURPLE, PURPLE_LIGHT, TEAL, GREEN, CORAL, YELLOW, PINK,
+    PURPLE, PURPLE_LIGHT, TEAL, GREEN, CORAL, YELLOW, PINK, WHITE,
 )
 from app.services.animation.types import Beat, Cue, Scene
 
@@ -138,7 +139,110 @@ def _first_sentence(text: str, max_chars: int = 90) -> str:
     return text[:max_chars].rstrip() + ("..." if len(text) > max_chars else "")
 
 
+# ---------------- Beat timing + kinetic captions ----------------
+
+def _resolve_beat_times(beats: list[dict], timeline: list[dict], duration: float,
+                        head: float = 0.6, tail: float = 1.0) -> list[float]:
+    """Map each beat to a scene-time, preferring its narration anchor word.
+
+    Anchors that resolve against the word timeline pin the beat to the voice;
+    unresolved beats are evenly spaced. Times are forced monotonic with a small
+    minimum gap so captions never stack on top of each other.
+    """
+    n = len(beats)
+    if n == 0:
+        return []
+    span_end = max(head + 2.0, duration - tail)
+    even = _evenly_spaced(head, span_end, n)
+    times: list[float] = []
+    for i, b in enumerate(beats):
+        anchor = (b.get("anchor") or "").strip()
+        t = _word_starts_with(timeline, [anchor]) if anchor else None
+        times.append(t if t is not None else even[i])
+    # Enforce monotonic order with a minimum spacing.
+    min_gap = max(1.2, (span_end - head) / (n + 1) * 0.6)
+    for i in range(1, n):
+        if times[i] <= times[i - 1] + min_gap:
+            times[i] = times[i - 1] + min_gap
+    return [max(head, min(t, span_end)) for t in times]
+
+
+def _beat_caption_cues(beats: list[dict], timeline: list[dict], duration: float,
+                       z: int = 80) -> list[Cue]:
+    """One rolling bottom caption per beat, each anchored to its narration word
+    and held until the next beat fires. Replaces the old single canned caption so
+    on-screen text tracks the voice and keeps delivering value."""
+    cues: list[Cue] = []
+    times = _resolve_beat_times(beats, timeline, duration)
+    for i, b in enumerate(beats):
+        text = (b.get("text") or "").strip()
+        if not text:
+            continue
+        start = times[i]
+        end_of_life = times[i + 1] if i + 1 < len(times) else duration
+        fade = 0.45
+        end_anim = min(start + fade, end_of_life)
+        cues.append(Cue(
+            kind="caption", start=start, end=end_anim,
+            params={"text": text, "y": 944}, ease="out", z=z,
+            hold=max(0.0, end_of_life - end_anim),
+        ))
+    return cues
+
+
+def _closing_cues(ctx: TemplateContext, fallback_text: str) -> list[Cue]:
+    """Kinetic beat captions when the visual script supplies beats; otherwise a
+    single closing caption (legacy behavior)."""
+    beats = ctx.extra.get("beats") or []
+    if beats:
+        return _beat_caption_cues(beats, ctx.word_timeline, ctx.duration)
+    return [_caption_cue(fallback_text, max(ctx.duration - 3.0, 0.5), ctx.duration)]
+
+
+def _beat_list_cues(beats: list[dict], timeline: list[dict], duration: float,
+                    x: int = 90, y0: int = 470, line_gap: int = 96,
+                    font_size: int = 40, accents: Optional[list] = None) -> list[Cue]:
+    """Reveal beats as a centered, building bullet list (kinetic typography).
+
+    Used by scenes whose center would otherwise be empty (e.g. the generic
+    `default`/`analogy` layouts without a diagram) so the screen keeps filling
+    with value, each line typed in as the narration reaches its anchor word.
+    """
+    accents = accents or [TEAL, GREEN, CORAL, YELLOW]
+    cues: list[Cue] = []
+    times = _resolve_beat_times(beats, timeline, duration)
+    for i, b in enumerate(beats):
+        text = (b.get("text") or "").strip()
+        if not text:
+            continue
+        t0 = times[i]
+        type_dur = max(0.4, min(1.1, len(text) * 0.035))
+        y = y0 + i * line_gap
+        color = accents[i % len(accents)]
+        # Colored bullet that pops, then the line types in beside it.
+        cues.append(Cue("chip", t0, t0 + 0.4, {
+            "text": str(i + 1), "anchor_xy": (x, y),
+            "bg": color, "fg": (10, 14, 38, 255), "font_size": 24,
+        }, ease="back", z=30 + i))
+        cues.append(Cue("text_in", t0 + 0.15, t0 + 0.15 + type_dur, {
+            "text": text, "anchor_xy": (x + 64, y + 4),
+            "font_size": font_size, "font_weight": "bold",
+            "color": WHITE, "cursor": False,
+        }, ease="linear", z=31 + i, hold=float("inf")))
+    return cues
+
+
 # ---------------- Template: hero ----------------
+
+def _hero_hook(title: str) -> str:
+    """A short value-promise hook for the opening scene, derived from the title."""
+    t = re.sub(r"\s+", " ", (title or "").strip()).rstrip(".!?")
+    if not t:
+        return "Here's the big idea - made simple."
+    if len(t) > 38:
+        t = t[:37].rstrip() + "\u2026"
+    return f"{t} - made simple."
+
 
 def build_hero(ctx: TemplateContext) -> Scene:
     cues: list[Cue] = []
@@ -150,17 +254,18 @@ def build_hero(ctx: TemplateContext) -> Scene:
     cx, cy = (280, CANVAS_H // 2)
 
     if icon_p:
-        cues.append(Cue("icon_reveal", 0.5, 1.5, {
+        # Fast reveal so something moves in the first second (the hook).
+        cues.append(Cue("icon_reveal", 0.3, 1.1, {
             "icon": icon_p, "center": (cx, cy), "size": 320,
             "glow": PURPLE_LIGHT, "glow_alpha": 170,
         }, ease="back", z=10))
-        cues.append(Cue("pulse_ring", 1.4, max(duration - 0.5, 4.0), {
+        cues.append(Cue("pulse_ring", 1.0, max(duration - 0.5, 4.0), {
             "center": (cx, cy), "base_radius": 200,
             "max_radius": 300, "color": PURPLE_LIGHT, "cycles": 3, "width": 4,
         }, ease="linear", z=11))
 
-    cues.append(_caption_cue("Welcome to a Nutanix Video Nugget.",
-                             max(duration - 2.5, 0.5), duration))
+    # Hook caption appears early and holds, promising value up front.
+    cues.append(_caption_cue(_hero_hook(ctx.title), 0.9, duration))
 
     return Scene(
         title=ctx.title, duration=duration, audio_path=ctx.audio_path,
@@ -174,7 +279,7 @@ def build_hero(ctx: TemplateContext) -> Scene:
 
 def build_outro(ctx: TemplateContext) -> Scene:
     cues: list[Cue] = [
-        _caption_cue("Thanks for watching. Keep learning Nutanix!",
+        _caption_cue("Thanks for watching - keep exploring!",
                      0.5, ctx.duration),
     ]
     return Scene(
@@ -213,8 +318,14 @@ def build_analogy(ctx: TemplateContext) -> Scene:
             "max_radius": 320, "color": accent[1], "cycles": 3, "width": 4,
         }, ease="linear", z=11))
 
-    cues.append(_caption_cue(_first_sentence(ctx.body) or ctx.title,
-                             max(duration - 3.0, 0.5), duration))
+    beats = ctx.extra.get("beats") or []
+    if beats:
+        # Building bullet list in the right-hand text column (icon sits left).
+        cues.extend(_beat_list_cues(beats, ctx.word_timeline, duration,
+                                    x=560, y0=430, line_gap=92, font_size=38))
+    else:
+        cues.append(_caption_cue(_first_sentence(ctx.body) or ctx.title,
+                                 max(duration - 3.0, 0.5), duration))
 
     return Scene(
         title=ctx.title, duration=duration, audio_path=ctx.audio_path,
@@ -227,7 +338,7 @@ def build_analogy(ctx: TemplateContext) -> Scene:
 # ---------------- Template: comparison ----------------
 
 def build_comparison(ctx: TemplateContext) -> Scene:
-    """Two-card comparison: traditional (left) vs Nutanix (right)."""
+    """Two-card comparison: the old way (left) vs the new way (right)."""
     cues: list[Cue] = []
     duration = ctx.duration
 
@@ -263,10 +374,7 @@ def build_comparison(ctx: TemplateContext) -> Scene:
         "max_radius": 150, "color": YELLOW, "cycles": 3, "width": 4,
     }, ease="linear", z=20))
 
-    cues.append(_caption_cue(
-        "Traditional silos vs Nutanix distributed software.",
-        max(duration - 3.0, 0.5), duration,
-    ))
+    cues.extend(_closing_cues(ctx, "The old way versus the new way."))
 
     return Scene(
         title=ctx.title, duration=duration, audio_path=ctx.audio_path,
@@ -352,8 +460,7 @@ def build_numbered_reveal(ctx: TemplateContext) -> Scene:
                 "color": color, "width": 4, "radius": 18,
             }, ease="out", z=8 + i, hold=0.0))
 
-    cues.append(_caption_cue(f"{n} key ideas to remember.",
-                             max(duration - 2.5, 0.5), duration))
+    cues.extend(_closing_cues(ctx, f"{n} key ideas to remember."))
 
     return Scene(
         title=ctx.title, duration=duration, audio_path=ctx.audio_path,
@@ -406,8 +513,7 @@ def build_key_points(ctx: TemplateContext) -> Scene:
                 "color": accent, "width": 4, "radius": 20,
             }, ease="out", z=8 + i, hold=0.0))
 
-    cues.append(_caption_cue("Key takeaways to keep in mind.",
-                             max(duration - 2.5, 0.5), duration))
+    cues.extend(_closing_cues(ctx, "Key takeaways to keep in mind."))
 
     return Scene(
         title=ctx.title, duration=duration, audio_path=ctx.audio_path,
@@ -467,10 +573,7 @@ def build_architecture_stack(ctx: TemplateContext) -> Scene:
             "color": color, "width": 4, "radius": 18,
         }, ease="out", z=30 + i, hold=0.0))
 
-    cues.append(_caption_cue(
-        "Apps -> Services -> Core -> Hardware. One platform.",
-        max(duration - 3.0, 0.5), duration,
-    ))
+    cues.extend(_closing_cues(ctx, "Layers stacking into one platform."))
 
     return Scene(
         title=ctx.title, duration=duration, audio_path=ctx.audio_path,
@@ -584,14 +687,131 @@ def build_default(ctx: TemplateContext) -> Scene:
             "max_radius": 360, "color": accent[1], "cycles": 3, "width": 4,
         }, ease="linear", z=11))
 
-    cues.append(_caption_cue(_first_sentence(ctx.body) or ctx.title,
-                             max(duration - 3.0, 0.5), duration))
+    beats = ctx.extra.get("beats") or []
+    if beats:
+        # Fill the (otherwise empty) body area with a building bullet list.
+        cues.extend(_beat_list_cues(beats, ctx.word_timeline, duration,
+                                    x=90, y0=470, line_gap=96))
+    else:
+        cues.append(_caption_cue(_first_sentence(ctx.body) or ctx.title,
+                                 max(duration - 3.0, 0.5), duration))
 
     return Scene(
         title=ctx.title, duration=duration, audio_path=ctx.audio_path,
         background_image=ctx.background_image, template="default",
         section_index=ctx.section_index, motion_seed=ctx.motion_seed,
         beats=[Beat("default", 0, duration, cues)],
+    )
+
+
+# ---------------- Template: diagram (LLM-authored animated graph) ----------------
+
+def _edge_point(cx: float, cy: float, hw: float, hh: float,
+                tx: float, ty: float) -> tuple[float, float]:
+    """Point on the border of a box (center cx,cy; half-size hw,hh) along the
+    direction toward (tx, ty). Lets edges start/end at node edges, not centers."""
+    dx, dy = tx - cx, ty - cy
+    if dx == 0 and dy == 0:
+        return cx, cy
+    sx = hw / abs(dx) if dx else float("inf")
+    sy = hh / abs(dy) if dy else float("inf")
+    k = min(sx, sy)
+    return cx + dx * k, cy + dy * k
+
+
+def build_diagram(ctx: TemplateContext) -> Scene:
+    """Build an animated boxes-and-arrows diagram from the LLM visual script.
+
+    Nodes pop in one by one (anchored to narration beats), edges draw between
+    them once both endpoints exist, and a flow dot travels along each edge to
+    convey movement - so the diagram assembles itself while the voice explains.
+    """
+    duration = ctx.duration
+    diagram = ctx.extra.get("diagram") or {}
+    nodes = diagram.get("nodes") or []
+    edges = diagram.get("edges") or []
+
+    if len(nodes) < 2:
+        return build_default(ctx)
+
+    # Design-space content area: below the headline band, above the caption lane.
+    AX0, AY0, AX1, AY1 = 130, 372, 1790, 898
+    cols = max((n.get("col", 0) for n in nodes), default=0) + 1
+    rows = max((n.get("row", 0) for n in nodes), default=0) + 1
+    cols = max(1, min(cols, 4))
+    rows = max(1, min(rows, 3))
+    cell_w = (AX1 - AX0) / cols
+    cell_h = (AY1 - AY0) / rows
+    pad_x = min(40, cell_w * 0.10)
+    pad_y = min(40, cell_h * 0.12)
+
+    palette = [TEAL, GREEN, CORAL, PURPLE_LIGHT, YELLOW, PINK]
+    geom: dict[str, dict] = {}
+    for i, node in enumerate(nodes):
+        col = max(0, min(node.get("col", i % cols), cols - 1))
+        row = max(0, min(node.get("row", i // cols), rows - 1))
+        bx0 = AX0 + col * cell_w + pad_x
+        by0 = AY0 + row * cell_h + pad_y
+        bx1 = AX0 + (col + 1) * cell_w - pad_x
+        by1 = AY0 + (row + 1) * cell_h - pad_y
+        geom[node["id"]] = {
+            "box": (bx0, by0, bx1, by1),
+            "cx": (bx0 + bx1) / 2, "cy": (by0 + by1) / 2,
+            "hw": (bx1 - bx0) / 2, "hh": (by1 - by0) / 2,
+            "color": palette[i % len(palette)],
+        }
+
+    # Reveal timing: spread node pop-ins across the first part of the scene so the
+    # diagram is fully assembled around the midpoint and then *holds* (with flow
+    # dots) while the voice keeps explaining. Anchoring to beat words bunched the
+    # reveals late on long narrations and left the canvas empty - pace it instead.
+    beats = ctx.extra.get("beats") or []
+    node_span_end = min(max(2.0, duration * 0.55), 13.0)
+    node_times = _evenly_spaced(0.6, node_span_end, len(nodes))
+
+    cues: list[Cue] = []
+    reveal_at: dict[str, float] = {}
+    for i, node in enumerate(nodes):
+        nid = node["id"]
+        g = geom[nid]
+        t0 = node_times[i] if i < len(node_times) else 0.6 + i * 1.5
+        reveal_at[nid] = t0
+        cues.append(Cue("node_box", t0, t0 + 0.7, {
+            "box": g["box"], "label": node.get("label", ""),
+            "color": g["color"], "icon": _icon_path(node["icon"]) if node.get("icon") else None,
+        }, ease="back", z=20 + i))
+
+    # Edges: draw after both endpoints exist, then send a flow dot along them.
+    for j, edge in enumerate(edges):
+        src, dst = edge.get("from"), edge.get("to")
+        if src not in geom or dst not in geom:
+            continue
+        gs, gd = geom[src], geom[dst]
+        p_start = _edge_point(gs["cx"], gs["cy"], gs["hw"], gs["hh"], gd["cx"], gd["cy"])
+        p_end = _edge_point(gd["cx"], gd["cy"], gd["hw"], gd["hh"], gs["cx"], gs["cy"])
+        draw_at = max(reveal_at.get(src, 0), reveal_at.get(dst, 0)) + 0.55
+        draw_at = min(draw_at, max(1.0, duration - 1.5))
+        color = gs["color"]
+        cues.append(Cue("arrow", draw_at, draw_at + 0.6, {
+            "start": p_start, "end": p_end,
+            "color": color, "width": 6, "head_size": 22, "curve": 0.0,
+        }, ease="out", z=14 + j, hold=float("inf")))
+        # One shared flow dot per edge keeps continuous motion cheap.
+        flow_start = draw_at + 0.6
+        if flow_start < duration - 0.6:
+            cycles = max(1, int((duration - flow_start) / 2.2))
+            cues.append(Cue("flow_dot", flow_start, max(duration - 0.4, flow_start + 1.0), {
+                "start": p_start, "end": p_end, "color": GREEN,
+                "radius": 9, "cycles": cycles,
+            }, ease="linear", z=40 + j))
+
+    cues.extend(_beat_caption_cues(beats, ctx.word_timeline, duration))
+
+    return Scene(
+        title=ctx.title, duration=duration, audio_path=ctx.audio_path,
+        background_image=ctx.background_image, template="diagram",
+        section_index=ctx.section_index, motion_seed=ctx.motion_seed,
+        beats=[Beat("diagram", 0, duration, cues)],
     )
 
 
@@ -661,10 +881,7 @@ def build_node_anatomy(ctx: TemplateContext) -> Scene:
             "icon": network_icon, "center": (cx - 600, cy + 230), "size": 130,
         }, ease="back", z=14))
 
-    cues.append(_caption_cue(
-        "Compute + storage in one box. That's a Nutanix node.",
-        max(duration - 3.0, 0.5), duration,
-    ))
+    cues.extend(_closing_cues(ctx, "Compute and storage, together in one box."))
 
     return Scene(
         title=ctx.title, duration=duration, audio_path=ctx.audio_path,
@@ -686,6 +903,7 @@ TEMPLATES = {
     "architecture": build_architecture_stack,
     "node_anatomy": build_node_anatomy,
     "bible_diagram": build_bible_diagram,
+    "diagram": build_diagram,
     "default": build_default,
 }
 

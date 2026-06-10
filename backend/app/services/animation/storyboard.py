@@ -150,12 +150,28 @@ def build_scenes(
         layout = seg_layout or "default"
         template_name = _override_template_for_section(section, layout)
 
-        extra: dict = {}
+        vs = getattr(section, "visual_script", None) or {}
+
+        extra: dict = {
+            "beats": vs.get("beats") or [],
+            "headline": vs.get("headline") or "",
+        }
         if template_name in ("numbered_reveal", "numbered"):
             extra["points"] = _extract_numbered_points(section.body, max_points=4)
+
         if layout == "bible_diagram" and seg_diagram is not None:
+            # A real Cloud Bible figure (factual) always wins over a synthesized graph.
             extra["diagram"] = seg_diagram
             template_name = "bible_diagram"
+        elif (
+            vs.get("scene_type") == "diagram"
+            and vs.get("diagram")
+            and layout in ("default", "analogy")
+        ):
+            # LLM authored a boxes-and-arrows graph and the backdrop is generic:
+            # build an animated diagram instead of a static-ish focal-icon scene.
+            extra["diagram"] = vs["diagram"]
+            template_name = "diagram"
 
         ctx = TemplateContext(
             title=section.title, body=section.body,

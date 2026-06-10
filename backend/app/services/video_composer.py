@@ -19,7 +19,10 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from app.config import VIDEOS_DIR, TRANSCRIPTS_DIR, THUMBNAILS_DIR, VIDEO_RESOLUTION
+from app.config import (
+    VIDEOS_DIR, TRANSCRIPTS_DIR, THUMBNAILS_DIR, VIDEO_RESOLUTION,
+    RENDER_W, RENDER_H, VIDEO_FPS, VIDEO_X264_PRESET, VIDEO_X264_CRF,
+)
 from app.services import slide_image_generator
 from app.services.slide_image_generator import render_slide_images, render_slide_images_with_layouts
 
@@ -60,11 +63,15 @@ def compose_video(
             use_animation = False
 
     prev_omit = slide_image_generator.OMIT_FOCAL_ICONS
+    prev_omit_body = slide_image_generator.OMIT_BODY_TEXT
     try:
         slide_image_generator.OMIT_FOCAL_ICONS = bool(use_animation)
+        # Clean backdrops on generic layouts; kinetic beat captions carry the body.
+        slide_image_generator.OMIT_BODY_TEXT = bool(use_animation)
         slide_images, slide_layouts, slide_diagrams = render_slide_images_with_layouts(parsed_content, video_id, slides_dir)
     finally:
         slide_image_generator.OMIT_FOCAL_ICONS = prev_omit
+        slide_image_generator.OMIT_BODY_TEXT = prev_omit_body
 
     if not slide_images:
         raise RuntimeError("No slide images were rendered")
@@ -83,7 +90,7 @@ def compose_video(
                 f"template={scene.template} duration={scene.duration:.1f}s"
             )
             try:
-                render_scene(scene, seg_path, fps=30, log_progress=False)
+                render_scene(scene, seg_path, fps=VIDEO_FPS, log_progress=False)
             except Exception as e:
                 print(f"[compose_video] animated render failed for segment {i}: {e}; using static fallback")
                 seg = audio_segments[i]
@@ -170,9 +177,9 @@ def _create_segment_video(
     """
     output_path = str(VIDEOS_DIR / f"segment_{video_id}_{index:03d}.mp4")
 
-    fps = 30
+    fps = VIDEO_FPS
     total_frames = max(int(duration * fps), 1)
-    target_w, target_h = VIDEO_RESOLUTION
+    target_w, target_h = RENDER_W, RENDER_H
 
     motions = [
         {"zoom_start": 1.00, "zoom_end": 1.06, "x": "iw/2-(iw/zoom/2)", "y": "ih/2-(ih/zoom/2)"},
@@ -200,7 +207,7 @@ def _create_segment_video(
         "ffmpeg", "-y",
         "-loop", "1", "-framerate", str(fps), "-i", slide_image,
         "-i", audio_path,
-        "-c:v", "libx264", "-preset", "medium", "-crf", "20",
+        "-c:v", "libx264", "-preset", VIDEO_X264_PRESET, "-crf", VIDEO_X264_CRF,
         "-c:a", "aac", "-b:a", "192k",
         "-vf", vf,
         "-pix_fmt", "yuv420p",

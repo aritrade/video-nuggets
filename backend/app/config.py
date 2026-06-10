@@ -73,6 +73,19 @@ VIDEO_MAX_DURATION_MINUTES = 12
 VIDEO_TARGET_DURATION_MINUTES = 10
 VIDEO_RESOLUTION = (1920, 1080)
 
+# Render/compositing resolution + frame rate. The animation engine composites
+# frames in PIL, which is CPU-bound, so the default targets 720p/24fps for
+# reliable renders on constrained hosts (e.g. Render's free tier: ~0.1 CPU,
+# 512 MB). Set VIDEO_HQ=true to composite at full 1080p/30fps where you have
+# the headroom (local dev or a paid plan). The animation layout is authored in
+# a 1920x1080 design space and scaled to this resolution, so both look the same.
+VIDEO_HQ = os.getenv("VIDEO_HQ", "false").lower() == "true"
+RENDER_W, RENDER_H = (1920, 1080) if VIDEO_HQ else (1280, 720)
+VIDEO_FPS = int(os.getenv("VIDEO_FPS", "30" if VIDEO_HQ else "24"))
+# x264 speed/quality knobs for per-scene encodes (env-tunable).
+VIDEO_X264_PRESET = os.getenv("VIDEO_X264_PRESET", "medium" if VIDEO_HQ else "veryfast")
+VIDEO_X264_CRF = os.getenv("VIDEO_X264_CRF", "20" if VIDEO_HQ else "21")
+
 # Neutral brand palette for charts and slides (purple / teal / accent).
 BRAND_COLORS = {
     "dark_purple": "#4B00AA",

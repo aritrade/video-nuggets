@@ -32,7 +32,22 @@ from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-CANVAS_W, CANVAS_H = 1920, 1080
+from app import config
+
+# Templates author against a fixed 1920x1080 "design space" (CANVAS_W/H below).
+# The compositor, however, renders at config.RENDER_W/H (default 1280x720) for
+# speed on constrained hosts. Every primitive scales the design-space coords and
+# sizes it receives into render pixels via `s()`, and overlays are allocated at
+# the render resolution - so PIL does ~2.25x less work at 720p while layouts stay
+# pixel-identical. Templates need no changes when the resolution changes.
+CANVAS_W, CANVAS_H = 1920, 1080            # design space (what templates use)
+RENDER_W, RENDER_H = config.RENDER_W, config.RENDER_H  # actual composited pixels
+SCALE = RENDER_W / CANVAS_W
+
+
+def s(value: float) -> int:
+    """Scale a design-space (1920x1080) measurement into render pixels."""
+    return int(round(value * SCALE))
 
 PURPLE = (110, 70, 235)
 PURPLE_LIGHT = (140, 100, 255)
@@ -91,7 +106,7 @@ def _color(c) -> tuple[int, int, int, int]:
 
 
 def _blank_overlay() -> Image.Image:
-    return Image.new("RGBA", (CANVAS_W, CANVAS_H), (0, 0, 0, 0))
+    return Image.new("RGBA", (RENDER_W, RENDER_H), (0, 0, 0, 0))
 
 
 # ---------------- Icon cache ----------------
@@ -118,8 +133,10 @@ def _load_icon(path: str, size: int) -> Optional[Image.Image]:
 
 # ---------------- Glow / disc helpers ----------------
 
-def _glow(size: int, color, alpha: int = 140, blur: int = 30) -> Image.Image:
-    """Soft circular glow."""
+def _glow(size: int, color, alpha: int = 140, blur: Optional[int] = None) -> Image.Image:
+    """Soft circular glow. `size` is in render pixels; blur scales with it."""
+    if blur is None:
+        blur = max(6, size // 10)
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     margin = blur
@@ -158,8 +175,8 @@ def icon_reveal(progress: float, params: dict) -> Image.Image:
     overlay = _blank_overlay()
     icon_path = params.get("icon")
     pil_image = params.get("pil_image")
-    cx, cy = params["center"]
-    size = int(params.get("size", 256))
+    cx, cy = s(params["center"][0]), s(params["center"][1])
+    size = s(int(params.get("size", 256)))
     glow_color = params.get("glow")
     glow_alpha = int(params.get("glow_alpha", 150))
 
@@ -188,12 +205,12 @@ def icon_reveal(progress: float, params: dict) -> Image.Image:
     tag = params.get("tag")
     if tag and progress > 0.6:
         d = ImageDraw.Draw(overlay)
-        f = _font("bold", int(params.get("tag_size", 22)))
+        f = _font("bold", s(int(params.get("tag_size", 22))))
         tag_progress = (progress - 0.6) / 0.4
         tag_color = _color(params.get("tag_color", TEXT_MUTED))
         tag_color = tag_color[:3] + (int(255 * tag_progress),)
         d.text(
-            (cx, cy + size // 2 + 30),
+            (cx, cy + size // 2 + s(30)),
             tag.upper(),
             font=f,
             fill=tag_color,
@@ -211,8 +228,8 @@ def fade_in(progress: float, params: dict) -> Image.Image:
 
 def _icon_basic(progress: float, params: dict, scale_curve=lambda p: 1.0) -> Image.Image:
     overlay = _blank_overlay()
-    cx, cy = params["center"]
-    size = int(params.get("size", 256))
+    cx, cy = s(params["center"][0]), s(params["center"][1])
+    size = s(int(params.get("size", 256)))
     icon_path = params.get("icon")
     pil_image = params.get("pil_image")
     scale = scale_curve(progress)
@@ -234,11 +251,12 @@ def _icon_basic(progress: float, params: dict, scale_curve=lambda p: 1.0) -> Ima
 def slide_in(progress: float, params: dict) -> Image.Image:
     """Icon translates from `from_offset` to its target `center` while fading in."""
     overlay = _blank_overlay()
-    target_cx, target_cy = params["center"]
+    target_cx, target_cy = s(params["center"][0]), s(params["center"][1])
     fx, fy = params.get("from_offset", (-200, 0))
+    fx, fy = s(fx), s(fy)
     cx = int(target_cx + fx * (1.0 - progress))
     cy = int(target_cy + fy * (1.0 - progress))
-    size = int(params.get("size", 256))
+    size = s(int(params.get("size", 256)))
     icon_path = params.get("icon")
     pil_image = params.get("pil_image")
     icon_img = pil_image or (_load_icon(icon_path, size) if icon_path else None)
@@ -256,11 +274,11 @@ def slide_in(progress: float, params: dict) -> Image.Image:
 def pulse_ring(progress: float, params: dict) -> Image.Image:
     """Expanding ring that fades out as it grows. Use ease='pulse' for repeating effect."""
     overlay = _blank_overlay()
-    cx, cy = params["center"]
-    base_radius = int(params.get("base_radius", 100))
-    max_radius = int(params.get("max_radius", 200))
+    cx, cy = s(params["center"][0]), s(params["center"][1])
+    base_radius = s(int(params.get("base_radius", 100)))
+    max_radius = s(int(params.get("max_radius", 200)))
     color = _color(params.get("color", PURPLE_LIGHT))
-    width = int(params.get("width", 4))
+    width = max(1, s(int(params.get("width", 4))))
     cycles = int(params.get("cycles", 1))
 
     p = (progress * cycles) % 1.0 if cycles > 1 else progress
@@ -278,11 +296,11 @@ def pulse_ring(progress: float, params: dict) -> Image.Image:
 def arrow(progress: float, params: dict) -> Image.Image:
     """Animated arrow that grows from `start` toward `end`, drawing an arrowhead at the tip."""
     overlay = _blank_overlay()
-    sx, sy = params["start"]
-    ex, ey = params["end"]
+    sx, sy = s(params["start"][0]), s(params["start"][1])
+    ex, ey = s(params["end"][0]), s(params["end"][1])
     color = _color(params.get("color", YELLOW))
-    width = int(params.get("width", 8))
-    head_size = int(params.get("head_size", 24))
+    width = max(1, s(int(params.get("width", 8))))
+    head_size = s(int(params.get("head_size", 24)))
     curve = float(params.get("curve", 0.0))  # 0 = straight, 0.3 = gentle bow
 
     cur_x = sx + (ex - sx) * progress
@@ -329,10 +347,11 @@ def highlight_box(progress: float, params: dict) -> Image.Image:
       color, width, radius
     """
     overlay = _blank_overlay()
-    x0, y0, x1, y1 = params["box"]
+    x0, y0, x1, y1 = (s(params["box"][0]), s(params["box"][1]),
+                      s(params["box"][2]), s(params["box"][3]))
     color = _color(params.get("color", YELLOW))
-    width = int(params.get("width", 6))
-    radius = int(params.get("radius", 18))
+    width = max(1, s(int(params.get("width", 6))))
+    radius = s(int(params.get("radius", 18)))
 
     perimeter = 2 * ((x1 - x0) + (y1 - y0))
     drawn = perimeter * progress
@@ -383,8 +402,8 @@ def text_in(progress: float, params: dict) -> Image.Image:
     """
     overlay = _blank_overlay()
     text = params["text"]
-    x, y = params["anchor_xy"]
-    font_size = int(params.get("font_size", 36))
+    x, y = s(params["anchor_xy"][0]), s(params["anchor_xy"][1])
+    font_size = s(int(params.get("font_size", 36)))
     weight = params.get("font_weight", "bold")
     color = _color(params.get("color", WHITE))
     n = max(1, int(len(text) * progress))
@@ -395,10 +414,10 @@ def text_in(progress: float, params: dict) -> Image.Image:
 
     if params.get("cursor", True) and progress < 1.0:
         bbox = d.textbbox((x, y), visible, font=f)
-        cx = bbox[2] + 4
+        cx = bbox[2] + s(4)
         cy0 = bbox[1]
         cy1 = bbox[3]
-        d.rectangle([cx, cy0, cx + 6, cy1], fill=color)
+        d.rectangle([cx, cy0, cx + s(6), cy1], fill=color)
 
     return overlay
 
@@ -415,24 +434,24 @@ def caption(progress: float, params: dict) -> Image.Image:
     """
     overlay = _blank_overlay()
     text = params["text"]
-    y = int(params.get("y", 920))
+    y = s(int(params.get("y", 920)))
     bg = _color(params.get("bg", (10, 14, 38, 200)))
     fg = _color(params.get("fg", WHITE))
-    font_size = int(params.get("font_size", 36))
+    font_size = s(int(params.get("font_size", 36)))
     f = _font("bold", font_size)
     d = ImageDraw.Draw(overlay)
     bbox = d.textbbox((0, 0), text, font=f)
     tw = bbox[2] - bbox[0]
     th = bbox[3] - bbox[1]
-    pad_x, pad_y = 32, 18
+    pad_x, pad_y = s(32), s(18)
     box_w = tw + pad_x * 2
     box_h = th + pad_y * 2
-    box_x = (CANVAS_W - box_w) // 2
+    box_x = (RENDER_W - box_w) // 2
     box_y = y
     alpha = int(255 * progress)
     bg_with_alpha = bg[:3] + (min(alpha, bg[3]),)
     d.rounded_rectangle([box_x, box_y, box_x + box_w, box_y + box_h],
-                        fill=bg_with_alpha, radius=18)
+                        fill=bg_with_alpha, radius=s(18))
     fg_alpha = fg[:3] + (alpha,)
     d.text((box_x + pad_x - bbox[0], box_y + pad_y - bbox[1]), text, font=f, fill=fg_alpha)
     return overlay
@@ -446,11 +465,12 @@ def chip(progress: float, params: dict) -> Image.Image:
     """
     overlay = _blank_overlay()
     text = params["text"]
-    x, y = params["anchor_xy"]
+    x, y = s(params["anchor_xy"][0]), s(params["anchor_xy"][1])
     bg = _color(params.get("bg", PURPLE_LIGHT))
     fg = _color(params.get("fg", WHITE))
-    fs = int(params.get("font_size", 24))
-    px, py = params.get("padding", (24, 10))
+    fs = s(int(params.get("font_size", 24)))
+    _pad = params.get("padding", (24, 10))
+    px, py = s(_pad[0]), s(_pad[1])
     f = _font("bold", fs)
     d = ImageDraw.Draw(overlay)
     bbox = d.textbbox((0, 0), text, font=f)
@@ -481,8 +501,8 @@ def count_up(progress: float, params: dict) -> Image.Image:
     overlay = _blank_overlay()
     fv = float(params.get("from_value", 0))
     tv = float(params.get("to_value", 100))
-    x, y = params["anchor_xy"]
-    fs = int(params.get("font_size", 96))
+    x, y = s(params["anchor_xy"][0]), s(params["anchor_xy"][1])
+    fs = s(int(params.get("font_size", 96)))
     color = _color(params.get("color", TEAL))
     suffix = params.get("suffix", "")
     cur = fv + (tv - fv) * progress
@@ -508,11 +528,12 @@ def diagram_reveal(progress: float, params: dict) -> Image.Image:
     img: Optional[Image.Image] = params.get("pil_image")
     if img is None:
         return overlay
-    cx, cy = params["center"]
+    cx, cy = s(params["center"][0]), s(params["center"][1])
     scale_start = float(params.get("scale_start", 0.85))
     scale = scale_start + (1.0 - scale_start) * progress
 
-    full_w, full_h = img.size
+    # The image was sized in design space; bring it into render space.
+    full_w, full_h = s(img.size[0]), s(img.size[1])
     drawn_w = max(8, int(full_w * scale))
     drawn_h = max(8, int(full_h * scale))
 
@@ -546,17 +567,131 @@ def spotlight(progress: float, params: dict) -> Image.Image:
       center, radius (target), dim (0..255 alpha of overlay)
     """
     overlay = _blank_overlay()
-    cx, cy = params["center"]
-    radius = int(params.get("radius", 200) * progress)
+    cx, cy = s(params["center"][0]), s(params["center"][1])
+    radius = int(s(params.get("radius", 200)) * progress)
     dim = int(params.get("dim", 130) * progress)
-    full = Image.new("RGBA", (CANVAS_W, CANVAS_H), (0, 0, 0, dim))
-    mask = Image.new("L", (CANVAS_W, CANVAS_H), 0)
+    full = Image.new("RGBA", (RENDER_W, RENDER_H), (0, 0, 0, dim))
+    mask = Image.new("L", (RENDER_W, RENDER_H), 0)
     md = ImageDraw.Draw(mask)
     md.ellipse([cx - radius, cy - radius, cx + radius, cy + radius], fill=255)
-    mask = mask.filter(ImageFilter.GaussianBlur(20))
+    mask = mask.filter(ImageFilter.GaussianBlur(s(20)))
     inv = mask.point(lambda v: 255 - v)
     full.putalpha(inv)
     overlay.alpha_composite(full)
+    return overlay
+
+
+def _wrap_lines(d: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, max_w: int) -> list[str]:
+    """Greedy word-wrap `text` to fit `max_w` pixels."""
+    words = text.split()
+    lines: list[str] = []
+    cur = ""
+    for w in words:
+        trial = (cur + " " + w).strip()
+        if d.textlength(trial, font=font) <= max_w or not cur:
+            cur = trial
+        else:
+            lines.append(cur)
+            cur = w
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def node_box(progress: float, params: dict) -> Image.Image:
+    """A diagram node: rounded rect with a translucent fill, accent border, an
+    optional icon at the top, and a centered (wrapped) label. Pops in from a
+    slight scale-down + fade.
+
+    params:
+      box: (x0, y0, x1, y1) in design space
+      label: str
+      color: accent rgb/rgba
+      icon: optional icon PNG path
+    """
+    overlay = _blank_overlay()
+    x0, y0, x1, y1 = (s(params["box"][0]), s(params["box"][1]),
+                      s(params["box"][2]), s(params["box"][3]))
+    color = _color(params.get("color", TEAL))
+    label = str(params.get("label", ""))
+    icon_path = params.get("icon")
+
+    cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
+    w, h = (x1 - x0), (y1 - y0)
+    sc = 0.82 + 0.18 * progress
+    dw, dh = int(w * sc), int(h * sc)
+    bx0, by0, bx1, by1 = cx - dw // 2, cy - dh // 2, cx + dw // 2, cy + dh // 2
+    a = int(255 * progress)
+
+    d = ImageDraw.Draw(overlay)
+    d.rounded_rectangle(
+        [bx0, by0, bx1, by1],
+        radius=s(16),
+        fill=color[:3] + (int(34 * progress),),
+        outline=color[:3] + (a,),
+        width=max(1, s(3)),
+    )
+
+    text_cy = cy
+    if icon_path and dh > s(130):
+        ic_size = s(64)
+        ic = _load_icon(icon_path, ic_size)
+        if ic is not None:
+            if progress < 1.0:
+                ic = ic.copy()
+                ic.putalpha(ic.split()[3].point(lambda v: int(v * progress)))
+            overlay.paste(ic, (cx - ic_size // 2, by0 + s(20)), ic)
+            text_cy = cy + s(26)
+
+    if label and progress > 0.3:
+        talpha = int(255 * min(1.0, (progress - 0.3) / 0.7))
+        f = _font("bold", s(26))
+        max_w = dw - s(28)
+        lines = _wrap_lines(d, label, f, max_w)[:3]
+        line_h = f.size + s(4)
+        total_h = line_h * len(lines)
+        ty = text_cy - total_h // 2
+        for line in lines:
+            d.text((cx, ty), line, font=f, fill=WHITE[:3] + (talpha,), anchor="ma")
+            ty += line_h
+
+    return overlay
+
+
+def flow_dot(progress: float, params: dict) -> Image.Image:
+    """A glowing dot traveling along an edge - conveys flow/data movement.
+
+    params:
+      start, end: (x, y) design-space endpoints
+      color, radius (default 9), curve (matches `arrow`'s bow), cycles
+    """
+    overlay = _blank_overlay()
+    sx, sy = s(params["start"][0]), s(params["start"][1])
+    ex, ey = s(params["end"][0]), s(params["end"][1])
+    color = _color(params.get("color", TEAL))
+    radius = max(2, s(int(params.get("radius", 9))))
+    curve = float(params.get("curve", 0.0))
+    cycles = int(params.get("cycles", 1))
+
+    p = (progress * cycles) % 1.0 if cycles > 1 else progress
+
+    if abs(curve) < 0.001:
+        x = sx + (ex - sx) * p
+        y = sy + (ey - sy) * p
+    else:
+        mx, my = (sx + ex) / 2, (sy + ey) / 2
+        dx, dy = ex - sx, ey - sy
+        length = max(1.0, math.hypot(dx, dy))
+        nx, ny = -dy / length, dx / length
+        bow_x, bow_y = mx + nx * length * curve, my + ny * length * curve
+        x = (1 - p) ** 2 * sx + 2 * (1 - p) * p * bow_x + p * p * ex
+        y = (1 - p) ** 2 * sy + 2 * (1 - p) * p * bow_y + p * p * ey
+
+    glow_size = radius * 5
+    g = _glow(glow_size, color, alpha=150)
+    overlay.paste(g, (int(x) - glow_size // 2, int(y) - glow_size // 2), g)
+    d = ImageDraw.Draw(overlay)
+    d.ellipse([x - radius, y - radius, x + radius, y + radius], fill=color[:3] + (255,))
     return overlay
 
 
@@ -575,6 +710,8 @@ PRIMITIVES = {
     "chip": chip,
     "count_up": count_up,
     "spotlight": spotlight,
+    "node_box": node_box,
+    "flow_dot": flow_dot,
 }
 
 

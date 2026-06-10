@@ -3,7 +3,7 @@ Rich, visually engaging slide image generator.
 
 Renders each narrated section as a 1920x1080 PNG using PIL with multiple layout
 templates. No PPTX or LibreOffice dependency - direct image composition with
-Nutanix brand colors, gradients, decorative shapes, and visual hierarchy.
+brand colors, gradients, decorative shapes, and visual hierarchy.
 
 Layout templates (auto-detected from section content):
 - HERO: Title slide with massive gradient text and decorative shapes
@@ -33,6 +33,12 @@ OMIT_FOCAL_ICONS = False
 animation engine can reveal them on top via icon_reveal cues. Discs and tags
 are also suppressed since the animation engine emits its own. Title text,
 chips, body copy, footers and dividers always render."""
+
+OMIT_BODY_TEXT = False
+"""When True, the standalone body *paragraph* on the generic layouts (default,
+analogy) is skipped so the backdrop stays clean for the animation engine - the
+narration-synced kinetic beat captions carry that text instead. Structured
+layouts (numbered/comparison/key_points/architecture) keep their cards."""
 
 CANVAS_W, CANVAS_H = 1920, 1080
 
@@ -260,7 +266,7 @@ def _footer(img: Image.Image, video_title: str, slide_num: int, total_slides: in
     img = _logo_n(img, (60, CANVAS_H - 90), size=42)
     draw = ImageDraw.Draw(img)
     f = _font("regular", 20)
-    draw.text((116, CANVAS_H - 79), "Nutanix Video Nuggets", font=f, fill=TEXT_MUTED)
+    draw.text((116, CANVAS_H - 79), "Video Nuggets OS", font=f, fill=TEXT_MUTED)
     draw.text((116, CANVAS_H - 55), video_title, font=_font("bold", 16), fill=TEXT_DIM)
 
     counter = f"{slide_num:02d} / {total_slides:02d}"
@@ -332,7 +338,7 @@ def _icon_or_letter(
 
 # ---------------- Layout: HERO ----------------
 
-def render_hero(title: str, subtitle: str = "Nutanix Video Nuggets") -> Image.Image:
+def render_hero(title: str, subtitle: str = "Video Nuggets OS") -> Image.Image:
     img = _base_canvas(seed=hash(title) & 0xFFFF)
 
     hero_icon = icon_library.best_icon_for_text(title, fallback="cloud_node", title=title)
@@ -359,7 +365,7 @@ def render_hero(title: str, subtitle: str = "Nutanix Video Nuggets") -> Image.Im
     draw = ImageDraw.Draw(img)
     draw.text((title_x, y + 20), subtitle, font=sf, fill=TEXT_MUTED)
 
-    img, _, _ = _draw_pill(img, (title_x, y + 80), "Learn Nutanix the fun way",
+    img, _, _ = _draw_pill(img, (title_x, y + 80), "Learn it the fun way",
                            bg=PURPLE_LIGHT, font_size=26)
     return img
 
@@ -403,14 +409,15 @@ def render_analogy(title: str, body: str, slide_num: int, total: int, video_titl
     draw = ImageDraw.Draw(img)
     draw.text((text_x, y + 20), "Imagine this...", font=label_font, fill=accent[0])
 
-    body_excerpt = _first_sentences(body, 3)
-    bf = _font("regular", 30)
-    body_lines = _wrap_text(body_excerpt, bf, CANVAS_W - text_x - 80, ImageDraw.Draw(img))
-    draw = ImageDraw.Draw(img)
-    body_y = y + 80
-    for line in body_lines[:8]:
-        draw.text((text_x, body_y), line, font=bf, fill=WHITE)
-        body_y += 46
+    if not OMIT_BODY_TEXT:
+        body_excerpt = _first_sentences(body, 3)
+        bf = _font("regular", 30)
+        body_lines = _wrap_text(body_excerpt, bf, CANVAS_W - text_x - 80, ImageDraw.Draw(img))
+        draw = ImageDraw.Draw(img)
+        body_y = y + 80
+        for line in body_lines[:8]:
+            draw.text((text_x, body_y), line, font=bf, fill=WHITE)
+            body_y += 46
 
     if matched_concept and not OMIT_FOCAL_ICONS:
         tag_font = _font("bold", 18)
@@ -792,18 +799,19 @@ def render_default(title: str, body: str, slide_num: int, total: int, video_titl
     od.rectangle([80, bar_y, 200, bar_y + 6], fill=accent[1] + (255,))
     img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
 
-    sentences = _extract_sentences(body, 3)
-    bf = _font("regular", 30)
-    draw = ImageDraw.Draw(img)
-    body_y = bar_y + 40
-    for sent in sentences:
-        wrapped = _wrap_text(sent, bf, CANVAS_W - 800, draw)
-        for line in wrapped[:3]:
-            draw.text((80, body_y), line, font=bf, fill=WHITE)
-            body_y += 42
-        body_y += 16
-        if body_y > CANVAS_H - 200:
-            break
+    if not OMIT_BODY_TEXT:
+        sentences = _extract_sentences(body, 3)
+        bf = _font("regular", 30)
+        draw = ImageDraw.Draw(img)
+        body_y = bar_y + 40
+        for sent in sentences:
+            wrapped = _wrap_text(sent, bf, CANVAS_W - 800, draw)
+            for line in wrapped[:3]:
+                draw.text((80, body_y), line, font=bf, fill=WHITE)
+                body_y += 42
+            body_y += 16
+            if body_y > CANVAS_H - 200:
+                break
 
     visual_size = 440
     visual_cx = CANVAS_W - 380
@@ -864,7 +872,7 @@ def render_outro(video_title: str) -> Image.Image:
     sub = _font("regular", 38)
     draw = ImageDraw.Draw(img)
     draw.text((CANVAS_W // 2, 510), f"You just learned: {video_title}", font=sub, fill=WHITE, anchor="mt")
-    draw.text((CANVAS_W // 2, 580), "Continue your Nutanix journey with the next nugget.", font=sub, fill=TEXT_MUTED, anchor="mt")
+    draw.text((CANVAS_W // 2, 580), "Continue your learning journey with the next nugget.", font=sub, fill=TEXT_MUTED, anchor="mt")
 
     pill_text = "Explore More Videos"
     pf = _font("bold", 32)
@@ -874,7 +882,7 @@ def render_outro(video_title: str) -> Image.Image:
 
     cf = _font("regular", 22)
     draw = ImageDraw.Draw(img)
-    draw.text((CANVAS_W // 2, CANVAS_H - 80), "Nutanix Video Nuggets - powered by the Nutanix Cloud Bible", font=cf, fill=TEXT_DIM, anchor="mm")
+    draw.text((CANVAS_W // 2, CANVAS_H - 80), "Video Nuggets OS", font=cf, fill=TEXT_DIM, anchor="mm")
     return img
 
 

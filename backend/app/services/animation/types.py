@@ -75,6 +75,7 @@ def get_ease(name: str | None) -> EaseFn:
 
 PERSISTENT_KINDS: set[str] = {
     "icon_reveal", "diagram_reveal", "fade_in", "slide_in", "chip", "text_in",
+    "node_box",
 }
 """Cues whose default behavior is to stay on screen after the animation
 completes. Override by setting `hold=0.0` explicitly on the cue."""

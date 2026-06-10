@@ -26,6 +26,10 @@ class ContentSection:
     # (manifest id, e.g. "p007_00") and/or a specific slide layout.
     diagram_id: str = ""
     preferred_layout: str = ""
+    # Optional LLM-authored visual storyboard for this section. When present it
+    # drives scene selection + animated beats/diagram (see storyboard_llm.py).
+    # Shape: {"scene_type", "headline", "beats":[{anchor,text}], "diagram":{nodes,edges}}
+    visual_script: dict = field(default_factory=dict)
 
 
 @dataclass

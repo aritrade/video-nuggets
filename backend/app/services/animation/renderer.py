@@ -26,10 +26,11 @@ from pathlib import Path
 
 from PIL import Image, ImageEnhance
 
-from app.services.animation.primitives import CANVAS_W, CANVAS_H, render_cue
+from app import config
+from app.services.animation.primitives import RENDER_W, RENDER_H, render_cue
 from app.services.animation.types import Cue, Scene
 
-DEFAULT_FPS = 30
+DEFAULT_FPS = config.VIDEO_FPS
 
 
 def _zoom_pan_bg(bg: Image.Image, t: float, duration: float, motion_seed: int = 0) -> Image.Image:
@@ -61,8 +62,8 @@ def _zoom_pan_bg(bg: Image.Image, t: float, duration: float, motion_seed: int = 
     x1 = min(bg.size[0], x0 + src_w)
     y1 = min(bg.size[1], y0 + src_h)
     cropped = bg.crop((x0, y0, x1, y1))
-    if cropped.size != (CANVAS_W, CANVAS_H):
-        cropped = cropped.resize((CANVAS_W, CANVAS_H), Image.LANCZOS)
+    if cropped.size != (RENDER_W, RENDER_H):
+        cropped = cropped.resize((RENDER_W, RENDER_H), Image.LANCZOS)
     return cropped
 
 
@@ -104,9 +105,9 @@ def render_scene(
         raise FileNotFoundError(f"Background not found: {bg_path}")
 
     bg = Image.open(bg_path).convert("RGB")
-    if bg.size != (CANVAS_W, CANVAS_H):
-        bg = bg.resize((CANVAS_W, CANVAS_H), Image.LANCZOS)
-    bg_upscaled = bg.resize((int(CANVAS_W * 1.06), int(CANVAS_H * 1.06)), Image.LANCZOS)
+    if bg.size != (RENDER_W, RENDER_H):
+        bg = bg.resize((RENDER_W, RENDER_H), Image.LANCZOS)
+    bg_upscaled = bg.resize((int(RENDER_W * 1.06), int(RENDER_H * 1.06)), Image.LANCZOS)
 
     duration = max(scene.duration, 0.1)
     total_frames = max(1, int(duration * fps))
@@ -119,11 +120,11 @@ def render_scene(
         "ffmpeg", "-y", "-loglevel", "error",
         "-f", "rawvideo",
         "-pix_fmt", "rgb24",
-        "-s", f"{CANVAS_W}x{CANVAS_H}",
+        "-s", f"{RENDER_W}x{RENDER_H}",
         "-r", str(fps),
         "-i", "-",
         "-i", scene.audio_path,
-        "-c:v", "libx264", "-preset", "medium", "-crf", "20",
+        "-c:v", "libx264", "-preset", config.VIDEO_X264_PRESET, "-crf", config.VIDEO_X264_CRF,
         "-c:a", "aac", "-b:a", "192k",
         "-pix_fmt", "yuv420p",
         "-shortest",
